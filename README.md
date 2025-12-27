@@ -1,6 +1,5 @@
-# ChatBoat 🤖
-
-A full-stack AI-powered chatbot application that leverages Google's Generative AI (Gemini) to provide intelligent conversational experiences. ChatBoat offers seamless authentication, conversation management, and a beautiful user interface for interactive AI conversations.
+# 🤖 AI ChatBot - MERN Stack
+A powerful, multimodal AI chatbot application built using the MERN Stack (MongoDB, Express, React, Node.js). This project leverages Google's Gemini API to handle text and image inputs, providing a ChatGPT-like experience with persistent conversation history and secure authentication.
 
 ## Quick Links
 
