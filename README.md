@@ -46,7 +46,7 @@ A powerful, multimodal AI chatbot application built using the MERN Stack (MongoD
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/yourusername/chatboat.git
+git clone https://github.com/rahul-kr-rai/chatboat.git
 cd chatboat
 
 # 2. Setup backend
@@ -185,8 +185,8 @@ ISC License - see [LICENSE](LICENSE) for details
 
 **Get Help:**
 - 📖 Read the [docs](INSTALLATION.md)
-- 🐛 [Open an issue](https://github.com/yourusername/chatboat/issues)
-- 💬 [Start a discussion](https://github.com/yourusername/chatboat/discussions)
+- 🐛 [Open an issue](https://github.com/rahul-kr-rai/chatboat/issues)
+- 💬 [Start a discussion](https://github.com/rahul-kr-rai/chatboat/discussions)
 
 ---
 
@@ -202,7 +202,7 @@ ISC License - see [LICENSE](LICENSE) for details
 ## Connect
 
 - 📩 [Email](mailto:support@chatboat.dev)
-- 💼 [LinkedIn](https://linkedin.com/in/yourusername)
+- 💼 [LinkedIn](https://linkedin.com/in/rahul-kr-rai)
 - 🌐 [Website](https://chatboat.dev)
 
 ---
