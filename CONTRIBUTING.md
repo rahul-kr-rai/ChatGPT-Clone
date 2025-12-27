@@ -23,7 +23,7 @@ Thank you for your interest in contributing to ChatBoat! We welcome contribution
 ### 2. Clone Your Fork
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/chatboat.git
+git clone https://github.com/rahul-kr-rai/chatboat.git
 cd chatboat
 ```
 
