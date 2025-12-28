@@ -179,3 +179,115 @@ html, body, #root {
 .social-divider span { background: #171717; padding: 0 10px; color: #666; }
 .forgot-link { color: #10a37f; font-size: 13px; text-align: right; cursor: pointer; margin: -5px 0 15px 0; display: block; }
 .thinking-text { color: #8e8e8e; font-style: italic; font-size: 14px; display: flex; align-items: center; }
+
+/* =========================================
+   Responsive Design (Media Queries)
+   ========================================= */
+
+/* --- Tablet & Smaller Laptops (Max Width: 1024px) --- */
+@media (max-width: 1024px) {
+  /* Reduce the large indentation on bot messages */
+  .msg-row.bot {
+    padding-left: 4rem;
+  }
+  
+  /* Allow messages to be wider on medium screens */
+  .msg-wrapper {
+    max-width: 80%;
+  }
+}
+
+/* --- Mobile Devices (Max Width: 768px) --- */
+@media (max-width: 768px) {
+  
+  /* 1. Layout Adjustments */
+  .chat-sidebar {
+    display: none; /* Hide sidebar by default on mobile */
+    /* Note: You would typically toggle this 'display' property with a JS button */
+  }
+
+  .chat-view {
+    width: 100%; /* Chat takes full width */
+  }
+
+  /* 2. Navbar Tweaks */
+  .top-navbar {
+    padding: 0 16px; /* Reduce padding */
+  }
+  
+  .nav-brand {
+    font-size: 1rem;
+  }
+
+  /* 3. Message Area Fixes */
+  .msg-row {
+    padding: 16px; /* Reduce side padding */
+  }
+
+  .msg-row.bot {
+    padding-left: 0; /* Critical: Remove huge indentation on mobile */
+    justify-content: flex-start;
+  }
+
+  .msg-wrapper {
+    max-width: 95%; /* Maximize space for text */
+  }
+
+  .user .text-box {
+    border-radius: 18px; /* Slightly softer corners for mobile bubbles */
+  }
+
+  /* 4. Input Area (Fixed Bottom) */
+  .input-fixed-bottom {
+    padding: 10px 0 0 0; /* Remove side padding to use full width */
+  }
+
+  .input-pill-container {
+    border-radius: 0; /* Flat look for mobile input bar */
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    padding: 10px 12px;
+  }
+
+  .pill-actions-row {
+    padding: 0 12px;
+    flex-wrap: nowrap; /* Prevent stacking */
+    overflow-x: auto;  /* Allow horizontal scroll for pill buttons */
+    -webkit-overflow-scrolling: touch; /* Smooth scroll on iOS */
+    margin-bottom: 12px;
+  }
+  
+  /* Hide scrollbar for pill actions */
+  .pill-actions-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* 5. Auth Modal (Login/Signup) */
+  .auth-card {
+    width: 90%; /* Prevent modal from being wider than screen */
+    padding: 20px;
+  }
+  
+  .hero-landing h1 {
+    font-size: 28px; /* Smaller font for landing title */
+    padding: 0 20px;
+  }
+}
+
+/* --- Small Mobile (Max Width: 480px) --- */
+@media (max-width: 480px) {
+  .signup-trigger, .login-trigger {
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+  
+  .text-box {
+    font-size: 15px; /* Slightly smaller text for readability */
+  }
+  
+  .send-tool {
+    width: 30px;
+    height: 30px;
+  }
+}
