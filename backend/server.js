@@ -97,7 +97,7 @@ app.post('/api/chat', optionalAuth, upload.single('file'), async (req, res) => {
     }
 
     // Using gemini-2.5-flash as per your request, ensure you have access or fallback to 1.5
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     let promptParts = [];
     if (message) promptParts.push(message);
