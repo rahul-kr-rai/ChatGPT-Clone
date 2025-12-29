@@ -9,6 +9,10 @@ import { GoogleLogin } from '@react-oauth/google';
 import './App.css';
 
 function App() {
+  // --- CONFIGURATION ---
+  // Switch this to your Render URL when deploying (e.g., "https://your-app.onrender.com")
+  const API_BASE = "http://localhost:10000"; 
+
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -29,7 +33,7 @@ function App() {
   // Load Conversation List
   useEffect(() => {
     if (user) {
-      fetch('http://localhost:5000/api/conversations', {
+      fetch(`${API_BASE}/api/conversations`, {
         headers: { 'Authorization': `Bearer ${user.token}` }
       })
       .then(res => res.json())
@@ -43,7 +47,7 @@ function App() {
     const loadChatHistory = async () => {
       if (user && activeConvId) {
         try {
-          const res = await fetch(`http://localhost:5000/api/conversations/${activeConvId}`, {
+          const res = await fetch(`${API_BASE}/api/conversations/${activeConvId}`, {
             headers: { 'Authorization': `Bearer ${user.token}` }
           });
           const data = await res.json();
@@ -122,7 +126,7 @@ function App() {
       const headers = {};
       if (user) headers['Authorization'] = `Bearer ${user.token}`;
 
-      const res = await fetch('http://localhost:5000/api/chat', {
+      const res = await fetch(`${API_BASE}/api/chat`, {
         method: 'POST',
         headers: headers,
         body: formData,
@@ -163,7 +167,7 @@ function App() {
 
     if (result.isConfirmed) {
       try {
-        await fetch(`http://localhost:5000/api/conversations/${id}`, {
+        await fetch(`${API_BASE}/api/conversations/${id}`, {
           method: 'DELETE',
           headers: { 'Authorization': `Bearer ${user.token}` }
         });
@@ -188,7 +192,7 @@ function App() {
     e.preventDefault();
     const url = authMode === 'login' ? 'login' : 'signup';
     try {
-      const res = await fetch(`http://localhost:5000/api/auth/${url}`, {
+      const res = await fetch(`${API_BASE}/api/auth/${url}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(authForm)
@@ -350,7 +354,7 @@ function App() {
                     showCancelButton: true
                   });
                   if (email) {
-                    fetch('http://localhost:5000/api/auth/forgot-password', {
+                    fetch(`${API_BASE}/api/auth/forgot-password`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ email })
@@ -364,7 +368,7 @@ function App() {
               
               <GoogleLogin
                 onSuccess={async (res) => {
-                  const r = await fetch('http://localhost:5000/api/auth/google-login', {
+                  const r = await fetch(`${API_BASE}/api/auth/google-login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ token: res.credential }) 
