@@ -28,7 +28,7 @@
   --bg-msg-user: #e5e5e5;
   --bg-hover: #f0f0f0;
   --bg-pill: #ffffff;
-  --border-color: #e5e5e5;
+  --border-color: #afafaf;
   --text-main: #333333;
   --text-secondary: #666;
   --text-placeholder: #555;
@@ -67,17 +67,28 @@ html, body, #root {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 24px;
+  padding: 0 16px; /* Slightly reduced for better mobile look */
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
   background-color: var(--bg-body);
 }
 
+/* Mobile Toggle Btn (Hidden on desktop) */
+.mobile-menu-btn {
+  display: none; /* Default hidden */
+  background: transparent;
+  border: none;
+  color: var(--text-main);
+  cursor: pointer;
+  margin-right: 12px;
+  padding: 4px;
+}
+
 .nav-brand { font-weight: 600; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; }
 .nav-brand .arrow { font-size: 0.8rem; margin-left: 6px; color: var(--text-secondary); }
 .nav-actions { display: flex; gap: 12px; align-items: center; }
-.login-trigger { background: transparent; color: var(--text-main); border: none; padding: 8px 12px; cursor: pointer; font-weight: 500; }
-.signup-trigger { background: #10a37f; color: white; border: none; padding: 8px 18px; border-radius: 24px; font-weight: 600; cursor: pointer; }
+.login-trigger { background: transparent; color: var(--text-main); border: 2px solid #10a37f; border-radius: 25px; padding: 8px 20px; cursor: pointer; font-weight: 500;display: flex; align-items: center; justify-content: center; }
+.signup-trigger { background: #10a37f; color: white; border: 2px solid #10a37f; border-radius: 25px; padding: 8px 20px; border-radius: 24px; font-weight: 600; cursor: pointer;  display: flex; align-items: center; justify-content: center; }
 
 /* Theme Toggle Button */
 .theme-toggle-btn {
@@ -100,8 +111,22 @@ html, body, #root {
   flex: 1; 
   overflow: hidden; 
   max-width: 100%; 
+  position: relative; /* Needed for mobile overlay positioning */
 }
-.chat-sidebar { width: 260px; background: var(--bg-sidebar); padding: 12px; display: flex; flex-direction: column; flex-shrink: 0; border-right: 1px solid var(--border-color); }
+
+.chat-sidebar { 
+  width: 260px; 
+  background: var(--bg-sidebar); 
+  padding: 12px; 
+  display: flex; 
+  flex-direction: column; 
+  flex-shrink: 0; 
+  border-right: 1px solid var(--border-color); 
+  transition: transform 0.3s ease;
+}
+
+/* Mobile Header in Sidebar (hidden on desktop) */
+.sidebar-header-mobile { display: none; }
 
 .new-chat-btn {
   width: 100%;
@@ -137,10 +162,10 @@ html, body, #root {
 .delete-btn:hover { color: #ff4d4d; background: rgba(255, 77, 77, 0.1); }
 .history-item:hover { background: var(--bg-hover); }
 .history-item.active { background: var(--bg-hover); font-weight: 500; }
-.guest-label { font-size: 12px; color: var(--text-secondary); text-align: center; margin-top: 20px; }
+.guest-label { font-size: 18px; color: var(--text-secondary); text-align: center; margin-top: 20px; }
 
 /* --- Chat View --- */
-.chat-view { flex: 1; display: flex; flex-direction: column; position: relative; background: var(--bg-body); }
+.chat-view { flex: 1; display: flex; flex-direction: column; position: relative; background: var(--bg-body); width: 100%; }
 
 .scrollable-messages {
   flex: 1;
@@ -157,13 +182,14 @@ html, body, #root {
 }
 .user-profile:hover { background-color: #1a7f64; transform: scale(1.05); }
 
-.hero-landing { height: 60vh; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--text-main); }
+.hero-landing { height: 60vh; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--text-main); padding: 0 20px; }
 .hero-landing h1 { font-size: 48px; font-weight: 700; margin-bottom: 40px; }
 
 /* --- Messages --- */
 .msg-row { width: 100%; display: flex; padding: 12px 24px; }
 .msg-row.user { justify-content: flex-end; }
-.msg-row.bot { justify-content: flex-start; padding-left: 20rem; }
+.msg-row.bot { justify-content: flex-start; padding-left: 20rem; /* Desktop padding */ }
+
 .msg-wrapper { max-width: 70%; display: flex; }
 
 .text-box {
@@ -180,23 +206,76 @@ html, body, #root {
 
 .input-pill-container {
   max-width: 800px; margin: 0 auto; background-color: var(--bg-input);
-  border: 1px solid var(--border-color); border-radius: 24px; padding: 12px 16px;
+  border: 1px solid var(--border-color); border-radius: 50px; padding: 12px 16px;
   box-shadow: 0 10px 20px var(--shadow-color);
+  position: relative; /* For absolute popover positioning */
 }
 
-.pill-actions-row { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; justify-content: left; }
-.action-pill {
-  background: var(--bg-pill); color: var(--text-main); border: 1px solid var(--border-color); padding: 6px 14px;
-  border-radius: 20px; font-size: 13px; display: flex; align-items: center; gap: 8px;
-  cursor: pointer; transition: background 0.2s;
+/* --- Popover Menu Styles --- */
+.attach-menu-popover {
+  position: absolute;
+  bottom: 110%; /* Place above the input bar */
+  left: 0;
+  background-color: var(--bg-sidebar); 
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-shadow: 0 8px 20px var(--shadow-color);
+  z-index: 100;
+  min-width: 200px;
+  backdrop-filter: blur(10px);
 }
-.action-pill:hover { background: var(--bg-hover); }
 
-/* In Light mode, make pills stand out more if needed */
-[data-theme="light"] .action-pill { background: #ffffff; border: 1px solid #ddd; color: #444; }
-[data-theme="light"] .action-pill:hover { background: #f0f0f0; }
+.menu-item {
+  background: transparent;
+  border: none;
+  color: var(--text-main);
+  padding: 12px;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+.menu-item:hover {
+  background: var(--bg-hover);
+}
 
-.pill-form { display: flex; align-items: center; gap: 10px; }
+/* --- Toggle Button --- */
+.attach-toggle-btn {
+  width: 40px; height: 40px; 
+  background-color: var(--bg-pill);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-right: 12px;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+/* Ensure the SVG has explicit size and isn't squashed */
+.attach-toggle-btn svg {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.attach-toggle-btn:hover, .attach-toggle-btn.active {
+  background-color: var(--bg-hover);
+  border-color: #888;
+}
+
+.pill-form { display: flex; align-items: center; gap: 0px; }
+
 .pill-form textarea { 
   flex: 1; background: transparent; border: none; color: var(--text-main); font-size: 16px; 
   outline: none; padding: 12px 0; min-height: 50px; max-height: 40vh; resize: none; 
@@ -204,8 +283,38 @@ html, body, #root {
 }
 .pill-form textarea::placeholder { color: var(--text-placeholder); }
 
-.input-tools { display: flex; align-items: center; gap: 12px; }
-.mic-tool { color: var(--icon-color); cursor: pointer; padding: 4px; }
+.input-tools { display: flex; align-items: center; gap: 12px; margin-left: 10px;}
+
+/* --- Mic Tool & Pulse Effect (UPDATED) --- */
+.mic-tool { 
+  color: var(--icon-color); 
+  cursor: pointer; 
+  padding: 10px; /* Increased padding for better ring effect */
+  border-radius: 50%; 
+  display: flex; 
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s; 
+}
+.mic-tool:hover { background-color: var(--bg-hover); color: var(--text-main); }
+
+.active-mic {
+  color: #10A37F !important; /* Force Red */
+  background-color: rgba(77, 255, 107, 0.1);
+  animation: pulse-ring 1.5s infinite;
+}
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 #10A37F;
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(255, 77, 77, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 77, 77, 0);
+  }
+}
 
 .send-tool {
   width: 35px; height: 35px; border-radius: 50%; 
@@ -221,7 +330,7 @@ html, body, #root {
   color: var(--bg-body);
 }
 
-.privacy-disclaimer { text-align: center; font-size: 12px; color: var(--text-secondary); margin-top: 14px; }
+.privacy-disclaimer { text-align: center; font-size: 15px; color: var(--text-secondary); margin-top: 14px; }
 
 /* --- File Preview Styles --- */
 .file-preview-pill {
@@ -269,6 +378,78 @@ html, body, #root {
 
 .forgot-link { color: #10a37f; font-size: 13px; text-align: right; cursor: pointer; margin: -5px 0 15px 0; display: block; }
 .thinking-text { color: var(--text-secondary); font-style: italic; font-size: 14px; display: flex; align-items: center; }
+
+/* --- RESPONSIVE MEDIA QUERIES --- */
+@media (max-width: 768px) {
+  /* Show hamburger menu */
+  .mobile-menu-btn { display: block; }
+
+  /* Navbar Adjustments */
+  .nav-brand { font-size: 1rem; }
+  .signup-trigger { padding: 6px 14px; font-size: 13px; }
+  .login-trigger { padding: 6px 10px; font-size: 13px; }
+
+  /* Sidebar slides out from the left */
+  .chat-sidebar {
+    position: fixed;
+    left: 0; top: 0; bottom: 0;
+    z-index: 1000;
+    transform: translateX(-100%); /* Hidden by default */
+    width: 80%; /* Takes mostly full width on very small screens */
+    max-width: 300px;
+    box-shadow: 4px 0 15px rgba(0,0,0,0.5);
+  }
+  
+  /* Class to open sidebar */
+  .chat-sidebar.open {
+    transform: translateX(0);
+  }
+
+  /* Overlay Background */
+  .mobile-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 900;
+    backdrop-filter: blur(2px);
+  }
+
+  /* Sidebar Header Mobile (Title + Close Btn) */
+  .sidebar-header-mobile {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-color);
+  }
+  
+  .sidebar-title {
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--text-main);
+  }
+
+  .close-sidebar-btn {
+    background: transparent; border: none; color: var(--text-secondary); cursor: pointer;
+    padding: 4px; display: flex; align-items: center;
+  }
+
+  /* Adjust Chat View to take full width */
+  .chat-view {
+    width: 100%;
+  }
+  
+  /* Adjust Message Padding for Mobile */
+  .msg-row { padding: 10px 16px; }
+  .msg-row.bot { padding-left: 0; }
+  .msg-wrapper { max-width: 85%; } 
+  .hero-landing h1 { font-size: 32px; }
+
+  /* Auth Card Mobile */
+  .auth-card { max-width: 90%; }
+  .input-fixed-bottom { padding: 10px; }
+  .input-pill-container { border-radius: 50px; padding: 8px 12px; }
+}
 
 /* --- SweetAlert2 Theme Overrides --- */
 
