@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { IoSend } from "react-icons/io5";
 import { 
-  Paperclip, Search, GraduationCap, Image as ImageIcon, Mic, Plus, Trash2, X 
+  Paperclip, Search, GraduationCap, Image as ImageIcon, Mic, 
+  Plus, Trash2, X, Sun, Moon, Square 
 } from 'lucide-react'; 
 import Swal from 'sweetalert2';
 import { GoogleLogin } from '@react-oauth/google';
@@ -10,7 +11,6 @@ import './App.css';
 
 function App() {
   // --- CONFIGURATION ---
-  // Switch this to your Render URL when deploying (e.g., "https://your-app.onrender.com")
   const API_BASE = "http://localhost:10000"; 
 
   const [messages, setMessages] = useState([]);
@@ -23,12 +23,23 @@ function App() {
   const [activeConvId, setActiveConvId] = useState(null);
   const [authForm, setAuthForm] = useState({ email: '', password: '' });
 
+  // Theme State (Default to Dark)
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
+
   // File Upload States
   const [selectedFile, setSelectedFile] = useState(null);
   const fileInputRef = useRef(null);
-
+  
+  // Refs
   const chatEndRef = useRef(null);
   const textAreaRef = useRef(null);
+  const abortControllerRef = useRef(null);
+
+  // --- Theme Effect ---
+  useEffect(() => {
+    localStorage.setItem('theme', theme);
+    document.body.setAttribute('data-theme', theme);
+  }, [theme]);
 
   // Load Conversation List
   useEffect(() => {
@@ -67,6 +78,10 @@ function App() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
 
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+  };
+
   const handleLogout = async () => {
     const result = await Swal.fire({
       title: 'Logout?',
@@ -76,8 +91,8 @@ function App() {
       confirmButtonColor: '#10a37f',
       cancelButtonColor: '#444',
       confirmButtonText: 'Yes, Logout',
-      background: '#fff',
-      color: '#171717'
+      background: theme === 'dark' ? '#171717' : '#fff',
+      color: theme === 'dark' ? '#fff' : '#000'
     });
 
     if (result.isConfirmed) {
@@ -100,12 +115,23 @@ function App() {
     setSelectedFile(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
-  // -------------------------------
+  
+  const handleStopGeneration = (e) => {
+    e.preventDefault();
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort(); 
+      abortControllerRef.current = null;
+    }
+    setIsLoading(false);
+  };
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if ((!input.trim() && !selectedFile) || isLoading) return;
     
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     const currentMessage = input;
     
     const displayMsg = selectedFile 
@@ -130,6 +156,7 @@ function App() {
         method: 'POST',
         headers: headers,
         body: formData,
+        signal: controller.signal
       });
       const data = await res.json();
       
@@ -147,10 +174,15 @@ function App() {
         setConversations(prev => [newChat, ...prev]);
       }
     } catch (err) { 
-      console.error(err); 
-      setMessages(prev => [...prev, { role: 'bot', text: "Error sending message." }]);
+      if (err.name === 'AbortError') {
+        setMessages(prev => [...prev, { role: 'bot', text: "*Generation stopped by user.*" }]);
+      } else {
+        console.error(err); 
+        setMessages(prev => [...prev, { role: 'bot', text: "Error sending message." }]);
+      }
     } finally { 
       setIsLoading(false); 
+      abortControllerRef.current = null;
     }
   };
 
@@ -158,11 +190,14 @@ function App() {
     e.stopPropagation();
     const result = await Swal.fire({
       title: 'Delete Chat?',
+      text: "This action cannot be undone.",
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#ff3a3a',
-      confirmButtonText: 'Yes',
-      background: '#fff'
+      cancelButtonColor: '#444',
+      confirmButtonText: 'Yes, delete it',
+      background: theme === 'dark' ? '#171717' : '#fff',
+      color: theme === 'dark' ? '#fff' : '#000'
     });
 
     if (result.isConfirmed) {
@@ -176,6 +211,17 @@ function App() {
           setActiveConvId(null);
           setMessages([]);
         }
+        
+        Swal.fire({
+          title: 'Deleted!',
+          text: 'Conversation has been removed.',
+          icon: 'success',
+          timer: 1500,
+          showConfirmButton: false,
+          background: theme === 'dark' ? '#171717' : '#fff',
+          color: theme === 'dark' ? '#fff' : '#000'
+        });
+
       } catch (err) { console.error(err); }
     }
   };
@@ -202,7 +248,6 @@ function App() {
         localStorage.setItem('user', JSON.stringify(data));
         setUser(data);
         setShowAuth(false);
-        // FIX: Clear guest messages on successful login
         setMessages([]); 
         setActiveConvId(null);
       } else if (authMode === 'signup' && res.ok) {
@@ -212,8 +257,80 @@ function App() {
     } catch(err) { console.error(err); }
   };
 
+  // --- UPDATED FORGOT PASSWORD FUNCTION ---
+  const handleForgotPassword = async () => {
+    // 1. Hide the auth overlay immediately so it doesn't clutter the background
+    setShowAuth(false); 
+
+    const bgColor = theme === 'dark' ? '#171717' : '#ffffff'; 
+    const txtColor = theme === 'dark' ? '#f9f9f9' : '#333333'; 
+
+    const { value: email, isDismissed } = await Swal.fire({
+      title: 'Reset Password',
+      text: 'Enter your email address to receive a recovery link.',
+      input: 'email',
+      inputPlaceholder: 'name@example.com',
+      background: bgColor,
+      color: txtColor,
+      confirmButtonColor: '#10a37f',
+      cancelButtonColor: '#444',
+      showCancelButton: true,
+      confirmButtonText: 'Send Link',
+      customClass: {
+        popup: 'high-index-swal'
+      },
+      inputValidator: (value) => {
+        if (!value) {
+          return 'Please enter your email address';
+        }
+      }
+    });
+    
+    // 2. If user clicks "Cancel" (isDismissed), bring back the Login Modal
+    if (isDismissed) {
+      setShowAuth(true);
+      return;
+    }
+    
+    if (email) {
+      try {
+        const res = await fetch(`${API_BASE}/api/auth/forgot-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+        
+        if (res.ok) {
+          await Swal.fire({
+            title: 'Email Sent!', 
+            text: `Recovery link sent to ${email}`, 
+            icon: 'success',
+            background: bgColor,
+            color: txtColor,
+            confirmButtonColor: '#10a37f'
+          });
+          // Note: Logic here leaves the auth card CLOSED after success.
+          // If you want it to reappear so they can login, add: setShowAuth(true);
+        } else {
+          await Swal.fire({
+            title: 'Error',
+            text: 'Could not send email. Try again.',
+            icon: 'error',
+            background: bgColor,
+            color: txtColor
+          });
+          // Re-show auth on error so they can try again
+          setShowAuth(true); 
+        }
+      } catch (error) {
+        console.error(error);
+        setShowAuth(true);
+      }
+    }
+  };
+
   return (
-    <div className="chatgpt-main">
+    <div className="chatgpt-main" data-theme={theme}>
       <input 
         type="file" 
         ref={fileInputRef} 
@@ -225,6 +342,10 @@ function App() {
       <nav className="top-navbar">
         <div className="nav-brand">AI ChatBot-1.1<span className="arrow">▾</span></div>
         <div className="nav-actions">
+          <button className="theme-toggle-btn" onClick={toggleTheme} title="Toggle Theme">
+            {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
+
           {!user ? (
             <>
               <button className="login-trigger" onClick={() => { setAuthMode('login'); setShowAuth(true); }}>Log in</button>
@@ -324,9 +445,26 @@ function App() {
                 />
                 <div className="input-tools">
                   <span className="mic-tool"><Mic size={18} /></span>
-                  <button type="submit" className="send-tool" disabled={(!input.trim() && !selectedFile) || isLoading}>
-                    <IoSend size={18} /> 
-                  </button>
+                  
+                  {isLoading ? (
+                    <button 
+                      type="button" 
+                      className="send-tool stop-tool" 
+                      onClick={handleStopGeneration}
+                      title="Stop generation"
+                    >
+                      <Square size={14} fill="currentColor" /> 
+                    </button>
+                  ) : (
+                    <button 
+                      type="submit" 
+                      className="send-tool" 
+                      disabled={(!input.trim() && !selectedFile)}
+                    >
+                      <IoSend size={18} /> 
+                    </button>
+                  )}
+
                 </div>
               </form>
             </div>
@@ -344,23 +482,7 @@ function App() {
               <input type="password" placeholder="Password" required onChange={e => setAuthForm({...authForm, password: e.target.value})} />
               
               {authMode === 'login' && (
-                <p className="forgot-link" onClick={async () => {
-                  const { value: email } = await Swal.fire({
-                    title: 'Forgot Password',
-                    input: 'email',
-                    background: '#171717',
-                    color: '#fff',
-                    confirmButtonColor: '#10a37f',
-                    showCancelButton: true
-                  });
-                  if (email) {
-                    fetch(`${API_BASE}/api/auth/forgot-password`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ email })
-                    }).then(() => Swal.fire('Sent!', 'Check email', 'success'));
-                  }
-                }}>Forgot Password?</p>
+                <p className="forgot-link" onClick={handleForgotPassword}>Forgot Password?</p>
               )}
 
               <button type="submit" className="auth-btn">Continue</button>
@@ -378,10 +500,17 @@ function App() {
                     localStorage.setItem('user', JSON.stringify(d));
                     setUser(d);
                     setShowAuth(false);
-                    // FIX: Clear guest messages on successful Google login
                     setMessages([]);
                     setActiveConvId(null);
-                    Swal.fire({ title: 'Success!', text: 'Logged in', icon: 'success', timer: 1500, showConfirmButton: false });
+                    Swal.fire({ 
+                      title: 'Success!', 
+                      text: 'Logged in', 
+                      icon: 'success', 
+                      timer: 1500, 
+                      showConfirmButton: false,
+                      background: theme === 'dark' ? '#171717' : '#fff',
+                      color: theme === 'dark' ? '#fff' : '#000'
+                    });
                   }
                 }}
                 onError={() => Swal.fire('Error', 'Google Login Failed', 'error')}
