@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { IoSend } from "react-icons/io5";
+import { IoSend } from "react-icons/io5"; 
 import { 
   Paperclip, Search, GraduationCap, Image as ImageIcon, Mic, 
-  Plus, Trash2, X, Sun, Moon, Square 
+  Plus, Trash2, X, Sun, Moon, Square, Menu 
 } from 'lucide-react'; 
 import Swal from 'sweetalert2';
 import { GoogleLogin } from '@react-oauth/google';
@@ -23,6 +23,16 @@ function App() {
   const [activeConvId, setActiveConvId] = useState(null);
   const [authForm, setAuthForm] = useState({ email: '', password: '' });
 
+  // New State for the "+" Menu
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
+
+  // --- Voice Input State ---
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef(null);
+
+  // --- Mobile Sidebar State ---
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
   // Theme State (Default to Dark)
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
 
@@ -34,12 +44,33 @@ function App() {
   const chatEndRef = useRef(null);
   const textAreaRef = useRef(null);
   const abortControllerRef = useRef(null);
+  const menuRef = useRef(null);
+  const btnRef = useRef(null);
 
   // --- Theme Effect ---
   useEffect(() => {
     localStorage.setItem('theme', theme);
     document.body.setAttribute('data-theme', theme);
   }, [theme]);
+
+  // --- Click Outside to Close Attach Menu ---
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        showAttachMenu &&
+        menuRef.current &&
+        !menuRef.current.contains(event.target) &&
+        btnRef.current &&
+        !btnRef.current.contains(event.target)
+      ) {
+        setShowAttachMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showAttachMenu]);
 
   // Load Conversation List
   useEffect(() => {
@@ -65,6 +96,8 @@ function App() {
           if (data && data.messages) {
             setMessages(data.messages);
           }
+          // On mobile, close sidebar when a chat is selected
+          setIsSidebarOpen(false);
         } catch (err) {
           console.error("Failed to load chat history:", err);
         }
@@ -91,7 +124,7 @@ function App() {
       confirmButtonColor: '#10a37f',
       cancelButtonColor: '#444',
       confirmButtonText: 'Yes, Logout',
-      background: theme === 'dark' ? '#171717' : '#fff',
+      background: theme === 'dark' ? '#171717' : '#edededff',
       color: theme === 'dark' ? '#fff' : '#000'
     });
 
@@ -101,13 +134,59 @@ function App() {
       setMessages([]);
       setConversations([]);
       setActiveConvId(null);
+      setIsSidebarOpen(false); // Close sidebar on logout
     }
+  };
+
+  // --- Voice Input Handler ---
+  const handleMicClick = () => {
+    if (isListening) {
+      if (recognitionRef.current) recognitionRef.current.stop();
+      setIsListening(false);
+      return;
+    }
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      Swal.fire({ 
+        icon: 'error', 
+        title: 'Not Supported', 
+        text: 'Your browser does not support Voice Input. Try Chrome or Edge.',
+        background: theme === 'dark' ? '#171717' : '#fff',
+        color: theme === 'dark' ? '#fff' : '#000'
+      });
+      return;
+    }
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false; 
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => setIsListening(true);
+    recognition.onend = () => setIsListening(false);
+    recognition.onerror = (e) => { console.error(e); setIsListening(false); };
+    
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      setInput(prev => {
+        const newData = prev + (prev.length > 0 && !prev.endsWith(' ') ? ' ' : '') + transcript;
+        setTimeout(() => {
+            if(textAreaRef.current) {
+                textAreaRef.current.style.height = 'auto';
+                textAreaRef.current.style.height = `${textAreaRef.current.scrollHeight}px`;
+            }
+        }, 0);
+        return newData;
+      });
+    };
+    recognitionRef.current = recognition;
+    recognition.start();
   };
 
   // --- File Handling Functions ---
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       setSelectedFile(e.target.files[0]);
+      setShowAttachMenu(false); 
     }
   };
 
@@ -129,14 +208,11 @@ function App() {
     e.preventDefault();
     if ((!input.trim() && !selectedFile) || isLoading) return;
     
+    setShowAttachMenu(false);
     const controller = new AbortController();
     abortControllerRef.current = controller;
-
     const currentMessage = input;
-    
-    const displayMsg = selectedFile 
-      ? `📄 [Uploaded: ${selectedFile.name}]\n\n${currentMessage}` 
-      : currentMessage;
+    const displayMsg = selectedFile ? `📄 [Uploaded: ${selectedFile.name}]\n\n${currentMessage}` : currentMessage;
 
     setMessages(prev => [...prev, { role: 'user', text: displayMsg }]);
     setInput('');
@@ -148,7 +224,7 @@ function App() {
       formData.append('message', currentMessage);
       if (activeConvId) formData.append('conversationId', activeConvId);
       if (selectedFile) formData.append('file', selectedFile);
-
+      
       const headers = {};
       if (user) headers['Authorization'] = `Bearer ${user.token}`;
 
@@ -159,30 +235,26 @@ function App() {
         signal: controller.signal
       });
       const data = await res.json();
-      
       if (data.error) throw new Error(data.error);
-
+      
       setMessages(prev => [...prev, { role: 'bot', text: data.text }]);
       clearFile();
 
       if (user && !activeConvId && data.conversationId) {
         setActiveConvId(data.conversationId);
-        const newChat = {
-          _id: data.conversationId,
-          title: currentMessage.substring(0, 30) || "File Upload"
-        };
+        const newChat = { _id: data.conversationId, title: currentMessage.substring(0, 30) || "File Upload" };
         setConversations(prev => [newChat, ...prev]);
       }
     } catch (err) { 
       if (err.name === 'AbortError') {
         setMessages(prev => [...prev, { role: 'bot', text: "*Generation stopped by user.*" }]);
-      } else {
+      } else { 
         console.error(err); 
-        setMessages(prev => [...prev, { role: 'bot', text: "Error sending message." }]);
+        setMessages(prev => [...prev, { role: 'bot', text: "Error sending message." }]); 
       }
     } finally { 
       setIsLoading(false); 
-      abortControllerRef.current = null;
+      abortControllerRef.current = null; 
     }
   };
 
@@ -196,7 +268,7 @@ function App() {
       confirmButtonColor: '#ff3a3a',
       cancelButtonColor: '#444',
       confirmButtonText: 'Yes, delete it',
-      background: theme === 'dark' ? '#171717' : '#fff',
+      background: theme === 'dark' ? '#171717' : '#edededff',
       color: theme === 'dark' ? '#fff' : '#000'
     });
 
@@ -207,21 +279,16 @@ function App() {
           headers: { 'Authorization': `Bearer ${user.token}` }
         });
         setConversations(prev => prev.filter(c => c._id !== id));
-        if (activeConvId === id) {
-          setActiveConvId(null);
-          setMessages([]);
-        }
-        
-        Swal.fire({
-          title: 'Deleted!',
-          text: 'Conversation has been removed.',
-          icon: 'success',
-          timer: 1500,
-          showConfirmButton: false,
-          background: theme === 'dark' ? '#171717' : '#fff',
-          color: theme === 'dark' ? '#fff' : '#000'
+        if (activeConvId === id) { setActiveConvId(null); setMessages([]); }
+        Swal.fire({ 
+          title: 'Deleted!', 
+          text: 'Conversation has been removed.', 
+          icon: 'success', 
+          timer: 1500, 
+          showConfirmButton: false, 
+          background: theme === 'dark' ? '#171717' : '#edededff', 
+          color: theme === 'dark' ? '#fff' : '#000' 
         });
-
       } catch (err) { console.error(err); }
     }
   };
@@ -232,6 +299,7 @@ function App() {
     setInput('');
     clearFile();
     if (textAreaRef.current) textAreaRef.current.style.height = 'auto';
+    setIsSidebarOpen(false); // Close sidebar on mobile
   };
 
   const handleAuth = async (e) => {
@@ -257,11 +325,8 @@ function App() {
     } catch(err) { console.error(err); }
   };
 
-  // --- UPDATED FORGOT PASSWORD FUNCTION ---
   const handleForgotPassword = async () => {
-    // 1. Hide the auth overlay immediately so it doesn't clutter the background
     setShowAuth(false); 
-
     const bgColor = theme === 'dark' ? '#171717' : '#ffffff'; 
     const txtColor = theme === 'dark' ? '#f9f9f9' : '#333333'; 
 
@@ -276,21 +341,11 @@ function App() {
       cancelButtonColor: '#444',
       showCancelButton: true,
       confirmButtonText: 'Send Link',
-      customClass: {
-        popup: 'high-index-swal'
-      },
-      inputValidator: (value) => {
-        if (!value) {
-          return 'Please enter your email address';
-        }
-      }
+      customClass: { popup: 'high-index-swal' },
+      inputValidator: (value) => { if (!value) return 'Please enter your email address'; }
     });
     
-    // 2. If user clicks "Cancel" (isDismissed), bring back the Login Modal
-    if (isDismissed) {
-      setShowAuth(true);
-      return;
-    }
+    if (isDismissed) { setShowAuth(true); return; }
     
     if (email) {
       try {
@@ -299,33 +354,13 @@ function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email })
         });
-        
         if (res.ok) {
-          await Swal.fire({
-            title: 'Email Sent!', 
-            text: `Recovery link sent to ${email}`, 
-            icon: 'success',
-            background: bgColor,
-            color: txtColor,
-            confirmButtonColor: '#10a37f'
-          });
-          // Note: Logic here leaves the auth card CLOSED after success.
-          // If you want it to reappear so they can login, add: setShowAuth(true);
+          await Swal.fire({ title: 'Email Sent!', text: `Recovery link sent to ${email}`, icon: 'success', background: bgColor, color: txtColor, confirmButtonColor: '#10a37f' });
         } else {
-          await Swal.fire({
-            title: 'Error',
-            text: 'Could not send email. Try again.',
-            icon: 'error',
-            background: bgColor,
-            color: txtColor
-          });
-          // Re-show auth on error so they can try again
+          await Swal.fire({ title: 'Error', text: 'Could not send email. Try again.', icon: 'error', background: bgColor, color: txtColor });
           setShowAuth(true); 
         }
-      } catch (error) {
-        console.error(error);
-        setShowAuth(true);
-      }
+      } catch (error) { console.error(error); setShowAuth(true); }
     }
   };
 
@@ -340,7 +375,12 @@ function App() {
       />
 
       <nav className="top-navbar">
-        <div className="nav-brand">AI ChatBot-1.1<span className="arrow">▾</span></div>
+        {/* --- MOBILE TOGGLE BUTTON --- */}
+        <button className="mobile-menu-btn" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
+          <Menu size={24} />
+        </button>
+
+        <div className="nav-brand">AI ChatBot-2.1<span className="arrow">▾</span></div>
         <div className="nav-actions">
           <button className="theme-toggle-btn" onClick={toggleTheme} title="Toggle Theme">
             {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
@@ -360,7 +400,21 @@ function App() {
       </nav>
 
       <div className="body-container">
-        <aside className="chat-sidebar">
+        {/* --- MOBILE OVERLAY --- */}
+        {isSidebarOpen && (
+          <div className="mobile-overlay" onClick={() => setIsSidebarOpen(false)}></div>
+        )}
+
+        {/* --- SIDEBAR --- */}
+        <aside className={`chat-sidebar ${isSidebarOpen ? 'open' : ''}`}>
+          {/* --- MOBILE SIDEBAR HEADER WITH TITLE --- */}
+          <div className="sidebar-header-mobile">
+            <span className="sidebar-title">Chat History</span>
+            <button className="close-sidebar-btn" onClick={() => setIsSidebarOpen(false)}>
+              <X size={20} />
+            </button>
+          </div>
+
           <button className="new-chat-btn" onClick={handleNewChat}>
             <Plus size={16} /> New Chat
           </button>
@@ -376,7 +430,7 @@ function App() {
                   <Trash2 size={14} />
                 </button>
               </div>
-            )) : <div className="guest-label">Log in to save history</div>}
+            )) : <div className="guest-label">Log in to save Chat history</div>}
           </div>
         </aside>
 
@@ -416,16 +470,40 @@ function App() {
                 </div>
               )}
 
-              <div className="pill-actions-row">
-                <button className="action-pill" onClick={() => fileInputRef.current.click()}>
-                  <Paperclip size={16} /> Attach
-                </button>
-                <button className="action-pill"><Search size={16} /> Search</button>
-                <button className="action-pill"><GraduationCap size={16} /> Study</button>
-                <button className="action-pill"><ImageIcon size={16} /> Create image</button>
-              </div>
+              {/* --- POPOVER MENU --- */}
+              {showAttachMenu && (
+                <div className="attach-menu-popover" ref={menuRef}>
+                  <button className="menu-item" onClick={() => { fileInputRef.current.click(); setShowAttachMenu(false); }}>
+                    <Paperclip size={18} /> Upload File
+                  </button>
+                  <button className="menu-item" onClick={() => setShowAttachMenu(false)}>
+                    <Search size={18} /> Search
+                  </button>
+                  <button className="menu-item" onClick={() => setShowAttachMenu(false)}>
+                    <GraduationCap size={18} /> Study
+                  </button>
+                  <button className="menu-item" onClick={() => setShowAttachMenu(false)}>
+                    <ImageIcon size={18} /> Create Image
+                  </button>
+                </div>
+              )}
               
               <form onSubmit={handleSendMessage} className="pill-form">
+                <button 
+                  type="button" 
+                  className={`attach-toggle-btn ${showAttachMenu ? 'active' : ''}`}
+                  onClick={() => setShowAttachMenu(!showAttachMenu)}
+                  ref={btnRef}
+                >
+                  <Plus 
+                    size={24} 
+                    style={{ 
+                      transform: showAttachMenu ? 'rotate(45deg)' : 'none', 
+                      transition: '0.2s' 
+                    }} 
+                  />
+                </button>
+
                 <textarea 
                   ref={textAreaRef}
                   value={input} 
@@ -440,35 +518,33 @@ function App() {
                       handleSendMessage(e);
                     }
                   }}
-                  placeholder={selectedFile ? "Add a caption..." : "Ask anything"}
+                  placeholder={selectedFile ? "Add a caption..." : (isListening ? "Listening..." : "Ask anything")}
                   rows="1"
+                  onClick={() => setShowAttachMenu(false)} 
                 />
+                
                 <div className="input-tools">
-                  <span className="mic-tool"><Mic size={18} /></span>
+                  <span 
+                    className={`mic-tool ${isListening ? 'active-mic' : ''}`} 
+                    onClick={handleMicClick}
+                    title={isListening ? "Stop listening" : "Start voice input"}
+                  >
+                    <Mic size={18} />
+                  </span>
                   
                   {isLoading ? (
-                    <button 
-                      type="button" 
-                      className="send-tool stop-tool" 
-                      onClick={handleStopGeneration}
-                      title="Stop generation"
-                    >
+                    <button type="button" className="send-tool stop-tool" onClick={handleStopGeneration} title="Stop generation">
                       <Square size={14} fill="currentColor" /> 
                     </button>
                   ) : (
-                    <button 
-                      type="submit" 
-                      className="send-tool" 
-                      disabled={(!input.trim() && !selectedFile)}
-                    >
+                    <button type="submit" className="send-tool" disabled={(!input.trim() && !selectedFile)}>
                       <IoSend size={18} /> 
                     </button>
                   )}
-
                 </div>
               </form>
             </div>
-            <p className="privacy-disclaimer">By messaging AI ChatBot-1.1, you agree to our Terms and Privacy Policy.</p>
+            <p className="privacy-disclaimer"> Made by <a href="https://github.com/rahul-kr-rai" target="_blank" rel="noopener noreferrer">Rahul Kumar Rai</a> ❤️ &copy; 2025</p>
           </div>
         </main>
       </div>
@@ -480,14 +556,9 @@ function App() {
             <form onSubmit={handleAuth}>
               <input type="email" placeholder="Email" required onChange={e => setAuthForm({...authForm, email: e.target.value})} />
               <input type="password" placeholder="Password" required onChange={e => setAuthForm({...authForm, password: e.target.value})} />
-              
-              {authMode === 'login' && (
-                <p className="forgot-link" onClick={handleForgotPassword}>Forgot Password?</p>
-              )}
-
+              {authMode === 'login' && <p className="forgot-link" onClick={handleForgotPassword}>Forgot Password?</p>}
               <button type="submit" className="auth-btn">Continue</button>
               <div className="social-divider"><span>OR</span></div>
-              
               <GoogleLogin
                 onSuccess={async (res) => {
                   const r = await fetch(`${API_BASE}/api/auth/google-login`, {
@@ -508,7 +579,7 @@ function App() {
                       icon: 'success', 
                       timer: 1500, 
                       showConfirmButton: false,
-                      background: theme === 'dark' ? '#171717' : '#fff',
+                      background: theme === 'dark' ? '#171717' : '#edededff',
                       color: theme === 'dark' ? '#fff' : '#000'
                     });
                   }
