@@ -1,210 +1,284 @@
 # 🤖 AI ChatBot - MERN Stack
+
 A powerful, multimodal AI chatbot application built using the MERN Stack (MongoDB, Express, React, Node.js). This project leverages Google's Gemini API to handle text and image inputs, providing a ChatGPT-like experience with persistent conversation history and secure authentication.
-
-## Quick Links
-
-📚 **Documentation:**
-- [Installation & Setup](INSTALLATION.md) - Detailed setup instructions
-- [API Documentation](API.md) - Complete API reference
-- [Contributing Guide](CONTRIBUTING.md) - How to contribute
 
 ---
 
 ## ✨ Features
 
-- 🔐 **JWT & Google OAuth** - Secure authentication
-- 💬 **AI-Powered Conversations** - Powered by Google Gemini API
-- 📝 **Conversation Management** - Save and organize chats
-- 🎨 **Modern UI** - Responsive React + Vite frontend
-- 📧 **Email Support** - Built-in email notifications
-- 🗂️ **MongoDB** - Persistent data storage
-- 🔒 **Password Encryption** - bcryptjs security
-- 📱 **File Uploads** - Multer file handling
-
----
+- Secure authentication: email/password with bcrypt and JWT, plus Google OAuth login
+- AI-powered responses using Google Generative AI (Gemini) for text and file inputs
+- Persistent conversations stored in MongoDB with per-user history
+- File uploads (images/files) supported via `multer` for multimodal prompts
+- Email-based password reset and notifications via `nodemailer`
+- Responsive React + Vite frontend with conversation management UI
+- CORS-configurable backend and environment-driven configuration via `dotenv`
 
 ## 🛠 Tech Stack
 
-| Layer | Technologies |
-|-------|--------------|
-| **Frontend** | React 19.2.0, Vite 7.2.4, React Markdown, SweetAlert2 |
-| **Backend** | Node.js, Express.js 5.2.1, MongoDB/Mongoose |
-| **AI** | Google Generative AI (Gemini) |
-| **Auth** | JWT, Google OAuth 2.0, bcryptjs |
-| **DevOps** | ESLint, Nodemailer, CORS, Multer |
+- Frontend: React (v19.x), Vite (v7.x), React Markdown, SweetAlert2
+- Backend: Node.js, Express (v5.x), `@google/generative-ai` (Gemini client)
+- Database: MongoDB with Mongoose ODM
+- Authentication: JWT (`jsonwebtoken`), Google OAuth (`google-auth-library`)
+- Utilities: `bcryptjs`, `multer`, `cors`, `nodemailer`, `dotenv`
 
 ---
 
-## ⚡ Quick Start
+## Repository structure
 
-### Prerequisites
-- Node.js 14+ ([Download](https://nodejs.org/))
-- MongoDB ([Local](https://www.mongodb.com/try/download/community) or [Atlas](https://www.mongodb.com/cloud/atlas))
-- Google API Key ([Get it here](https://console.cloud.google.com/))
+```
+ChatBoat/
+├── backend/                # Express API
+│   ├── server.js           # Main server & routes
+│   ├── db.js               # DB connection (reads process.env.MONGO_URI)
+│   ├── .env
+│   ├── middleware/         # Auth and other middleware
+│   │   └── auth.js
+│   └── models/             # Mongoose models (User, Conversation)
+│
+├── frontend/               # React + Vite app
+│   ├── src/
+│   │   ├── assets
+│   │   ├── App.css
+│   │   ├── App.jsx
+│   │   ├── Index.css
+│   │   ├── Main.jsx
+│   │   └── .env
+│   ├── public/
+│   └── vite.config.js
+```
+├── API.md
+├── CONTRIBUTING.md
+├── INSTALLATION.md
+└── README.md               # (this file)
+```
 
-### Installation
+---
+
+## Prerequisites
+
+- Node.js 14+ (Node 18+ recommended)
+- npm (bundled with Node.js)
+- MongoDB (local or Atlas)
+- Google Cloud credentials for Generative AI / OAuth (if you use those features)
+
+---
+
+
+
+## Installation
+
+1) Clone the repo:
 
 ```bash
-# 1. Clone repository
-git clone https://github.com/rahul-kr-rai/chatboat.git
+git clone https://github.com/yourusername/chatboat.git
 cd chatboat
+```
 
-# 2. Setup backend
+2) Install backend dependencies:
+
+```bash
 cd backend
 npm install
+```
 
-# 3. Setup frontend
+3) Install frontend dependencies:
+
+```bash
 cd ../frontend
 npm install
 ```
 
-### Configuration
+---
 
-**Create `.env` in `backend/`:**
+## Environment variables (important)
+
+Note: the code expects specific environment variable names. Keep these exact keys in your `.env` files.
+
+Backend (`backend/.env`):
+
+- `MONGO_URI` — MongoDB connection string (e.g. mongodb://localhost:27017/chatboat)
+- `JWT_SECRET` — secret string used to sign JWT tokens (required)
+- `GEMINI_API_KEY` — Google Generative AI key (optional; if missing AI features are disabled)
+- `GOOGLE_CLIENT_ID` — OAuth client id for Google sign-in (optional)
+- `EMAIL_USER` — account used to send emails (optional)
+- `EMAIL_PASS` — password or app password for the email account (optional)
+- `CLIENT_URL` — frontend URL allowed by CORS (optional)
+- `PORT` — server port (default in code: 10000 if not set)
+
+Example `backend/.env`:
+
 ```env
-MONGODB_URI=mongodb://localhost:27017/chatboat
-JWT_SECRET=your_secure_key_here
-GOOGLE_API_KEY=your_api_key_here
-GOOGLE_OAUTH_CLIENT_ID=your_client_id_here
+MONGO_URI=mongodb://localhost:27017/chatboat
+JWT_SECRET=your_secure_jwt_secret
+GEMINI_API_KEY=your_gemini_api_key
+GOOGLE_CLIENT_ID=your_google_oauth_client_id
+EMAIL_USER=youremail@example.com
+EMAIL_PASS=your_email_password
+CLIENT_URL=http://localhost:5173
 PORT=5000
 ```
 
-**Create `.env` in `frontend/`:**
+Frontend (`frontend/.env`):
+
+- `VITE_GOOGLE_OAUTH_CLIENT_ID` — Google OAuth client id used in the frontend (optional)
+- `VITE_API_BASE_URL` — backend base URL (e.g. http://localhost:5000)
+
+Example `frontend/.env`:
+
 ```env
-VITE_GOOGLE_OAUTH_CLIENT_ID=your_client_id_here
+VITE_GOOGLE_OAUTH_CLIENT_ID=your_google_oauth_client_id
 VITE_API_BASE_URL=http://localhost:5000
 ```
 
-👉 **[Full setup guide →](INSTALLATION.md)**
+Important: previously the README referenced `MONGODB_URI` — the code uses `MONGO_URI`. Use `MONGO_URI` in your backend `.env`.
 
-### Run Locally
+---
+
+## Running (development)
+
+1) Start the backend (from `/backend`):
 
 ```bash
-# Terminal 1 - Backend
-cd backend && npm start
-
-# Terminal 2 - Frontend
-cd frontend && npm run dev
+npm start
+# runs: node server.js (per backend/package.json)
 ```
 
-Open [http://localhost:5173](http://localhost:5173) 🚀
-
----
-
-## 📋 Project Structure
-
-```
-ChatBoat/
-├── backend/              # Express.js API
-│   ├── server.js        # Main server
-│   ├── db.js            # MongoDB connection
-│   ├── middleware/      # Auth middleware
-│   └── models/          # User, Conversation schemas
-│
-├── frontend/            # React app
-│   ├── src/            # React components
-│   ├── vite.config.js  # Build config
-│   └── index.html      # Entry HTML
-│
-├── INSTALLATION.md      # Setup guide
-├── API.md              # API reference
-├── CONTRIBUTING.md     # Contribution guidelines
-└── README.md           # This file
-```
-
----
-
-## 🔌 API Quick Reference
-
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| POST | `/api/auth/register` | Create account |
-| POST | `/api/auth/login` | Login |
-| POST | `/api/conversations` | New chat |
-| GET | `/api/conversations` | List chats |
-| POST | `/api/messages` | Send message |
-
-👉 **[Full API docs →](API.md)**
-
----
-
-## 🚀 Building for Production
+2) Start the frontend (from `/frontend`):
 
 ```bash
-# Frontend build
+npm run dev
+# runs Vite dev server (default: http://localhost:5173)
+```
+
+Open the frontend in your browser (typically `http://localhost:5173`).
+
+---
+
+## Build & Production
+
+Frontend build:
+
+```bash
 cd frontend
 npm run build
-# Creates optimized `dist/` folder
+# deploy contents of dist/ to your static host
+```
 
-# Backend
+Backend production:
+
+Set `NODE_ENV=production` and run your preferred process manager (PM2, systemd, Docker, etc.). Basic example:
+
+```bash
 NODE_ENV=production npm start
+# or: node server.js
 ```
 
 ---
 
-## 🤝 Contributing
+## API (quick reference)
 
-We love contributions! Here's how to get started:
+Common endpoints (see `API.md` for full docs):
 
-1. **Fork** the repository
-2. **Create** a feature branch: `git checkout -b feature/amazing-feature`
-3. **Commit** changes: `git commit -m "feat: add feature"`
-4. **Push** to branch: `git push origin feature/amazing-feature`
-5. **Open** a Pull Request
+- POST `/api/auth/signup` — create account (email + password)
+- POST `/api/auth/login` — login (returns JWT)
+- POST `/api/auth/google-login` — Google OAuth login
+- POST `/api/chat` — send message or file to the AI (multipart/form-data if uploading files)
+- GET `/api/conversations` — list user conversations
+- GET `/api/conversations/:id` — get conversation
+- DELETE `/api/conversations/:id` — delete conversation
 
-📖 **[Full contributing guide →](CONTRIBUTING.md)**
-
-### Quick Standards
-- Follow [Airbnb JS Style Guide](https://github.com/airbnb/javascript)
-- Use meaningful variable names
-- Keep commits atomic and descriptive
-- No hardcoded secrets or API keys
+Authentication: send `Authorization: Bearer <token>` header where required.
 
 ---
 
-## 📝 License
+## Notes & troubleshooting
 
-ISC License - see [LICENSE](LICENSE) for details
-
-**You can:**
-- ✅ Use commercially
-- ✅ Modify code
-- ✅ Distribute freely
-- ✅ Use privately
+- If the server exits immediately with an error about `JWT_SECRET` missing, add `JWT_SECRET` to `backend/.env`.
+- If Mongo fails to connect, confirm `MONGO_URI` and network/Atlas whitelist settings.
+- If AI features are disabled, set `GEMINI_API_KEY`.
+- For CORS issues, set `CLIENT_URL` in `backend/.env` or modify `allowedOrigins` in `server.js`.
 
 ---
 
-## 🆘 Support & Troubleshooting
+## Contributing
 
-**Issues?** Check [INSTALLATION.md](INSTALLATION.md#troubleshooting) for common solutions
-
-**Common Issues:**
-- MongoDB not connecting? → [See guide](INSTALLATION.md#mongodb-connection-issues)
-- API key errors? → [See guide](INSTALLATION.md#api-key-errors)
-- CORS problems? → [See guide](INSTALLATION.md#cors-errors)
-
-**Get Help:**
-- 📖 Read the [docs](INSTALLATION.md)
-- 🐛 [Open an issue](https://github.com/rahul-kr-rai/chatboat/issues)
-- 💬 [Start a discussion](https://github.com/rahul-kr-rai/chatboat/discussions)
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 
 ---
 
-## 🙏 Acknowledgments
+If you want, I can also:
 
-- [Google Generative AI](https://ai.google.dev/) - Gemini API
-- [Express.js](https://expressjs.com/) - Backend framework
-- [React](https://react.dev/) - Frontend library
-- [Vite](https://vitejs.dev/) - Build tool
+- update `INSTALLATION.md` to match these corrected env names and commands
+- run the backend locally (if you allow) to verify startup errors
+
+File updated: [README.md](README.md)
+
+
+**Build Backend**
+```bash
+cd backend
+# Backend is production-ready as Node.js/Express runs directly
+```
+
+**Build Frontend**
+```bash
+cd frontend
+npm run build
+# Creates optimized build in dist/ directory
+```
+
+### Linting
+
+```bash
+cd frontend
+npm run lint
+# Check code quality with ESLint
+```
 
 ---
 
-## Connect
+## API Endpoints
 
-- 📩 [Email](mailto:support@chatboat.dev)
-- 💼 [LinkedIn](https://linkedin.com/in/rahul-kr-rai)
-- 🌐 [Website](https://chatboat.dev)
+### Authentication Endpoints
+-----------------------------------------------------------------
+| Method |         Endpoint       |         Description         |
+|--------|------------------------|-----------------------------|
+| POST   | `/api/auth/register`   | Register a new user         |
+| POST   | `/api/auth/login`      | Login user                  |
+| POST   | `/api/auth/google-auth`| Google OAuth authentication |
+| POST   | `/api/auth/logout`     | Logout user                 |
+-----------------------------------------------------------------
+
+### Conversation Endpoints
+
+------------------------------------------------------------------
+| Method |         Endpoint         |        Description         |
+|--------|--------------------------|----------------------------|
+| POST   | `/api/conversations`     | Create new conversation    |
+| GET    | `/api/conversations`     | Get all user conversations |
+| GET    | `/api/conversations/:id` | Get specific conversation  |
+| PUT    | `/api/conversations/:id` | Update conversation        |
+| DELETE | `/api/conversations/:id` | Delete conversation        |
+------------------------------------------------------------------
+
+### Message Endpoints
+
+------------------------------------------------------------------------
+| Method |            Endpoint             |       Description         |
+|--------|---------------------------------|---------------------------|
+| POST   | `/api/messages`                 | Send message to AI        |
+| GET    | `/api/messages/:conversationId` | Get conversation messages |
+------------------------------------------------------------------------
+
+*Note: All endpoints (except auth) require JWT authentication*
+
+## Connect With Us
+
+- 📩 [Email](rahulkumarrai2711@gmail.com)
+- 💼 [LinkedIn](https://www.linkedin.com/in/rahulkumarraivgu/)
+- 🌐 [Website](https://github.com/rahul-kr-rai)
 
 ---
 
-**Happy coding!** 🚀 We're excited to see what you build with ChatBoat.
+**Happy coding!❤️ We're excited to see what you build with ChatBoat.** 🚀
