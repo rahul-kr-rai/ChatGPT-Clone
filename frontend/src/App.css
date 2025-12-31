@@ -67,7 +67,7 @@ html, body, #root {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 16px; /* Slightly reduced for better mobile look */
+  padding: 0 16px; 
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
   background-color: var(--bg-body);
@@ -384,9 +384,29 @@ html, body, #root {
   /* Show hamburger menu */
   .mobile-menu-btn { display: block; }
 
+  /* Navbar Container: Tighter padding for mobile */
+  .top-navbar {
+    padding: 0 10px;
+    gap: 8px; /* Control spacing between Brand and Actions */
+  }
+
   /* Navbar Adjustments */
-  .nav-brand { font-size: 1rem; }
-  .signup-trigger { padding: 6px 14px; font-size: 13px; }
+  .nav-brand { 
+    font-size: 1rem; 
+    white-space: nowrap; /* FIX: Prevents "AI ChatBot..." from breaking */
+    overflow: hidden;
+    text-overflow: ellipsis; /* Adds "..." if screen is too small */
+    flex: 1; 
+    min-width: 0; 
+  }
+  
+  /* Action Buttons Container */
+  .nav-actions {
+    gap: 8px; /* Reduce gap */
+    flex-shrink: 0; /* Ensure buttons don't get crushed */
+  }
+
+  .signup-trigger { padding: 6px 12px; font-size: 13px; }
   .login-trigger { padding: 6px 10px; font-size: 13px; }
 
   /* Sidebar slides out from the left */
@@ -449,6 +469,32 @@ html, body, #root {
   .auth-card { max-width: 90%; }
   .input-fixed-bottom { padding: 10px; }
   .input-pill-container { border-radius: 50px; padding: 8px 12px; }
+}
+
+/* --- EXTRA SMALL DEVICES (Galaxy Fold Cover, S8+) --- */
+@media (max-width: 380px) {
+  .nav-brand {
+    font-size: 0.9rem; /* Shrink text slightly */
+  }
+  
+  .nav-brand .arrow {
+    display: none; /* Hide the dropdown arrow to save space */
+  }
+
+  .nav-actions {
+    gap: 4px; /* Minimal gap */
+  }
+
+  .login-trigger { 
+    padding: 4px 6px; 
+    border: none; /* Remove border to reduce visual clutter */
+    font-size: 12px;
+  }
+  
+  .signup-trigger { 
+    padding: 5px 10px; 
+    font-size: 12px;
+  }
 }
 
 /* --- SweetAlert2 Theme Overrides --- */
