@@ -8,8 +8,13 @@ const auth = (req, res, next) => {
       return res.status(401).json({ error: "No token, authorization denied" });
     }
 
-    // FIXED: Synced fallback secret with server.js
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'rahul_kumar_rai_secret_key');
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+        console.error("JWT_SECRET missing in environment");
+        return res.status(500).json({ error: "Server Configuration Error" });
+    }
+
+    const decoded = jwt.verify(token, secret);
     
     req.user = decoded;
     next();
