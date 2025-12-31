@@ -19,15 +19,42 @@ const Conversation = require('./models/Conversation');
 const app = express();
 
 // --- CONFIGURATION ---
+const PORT = process.env.PORT || 10000;
+const JWT_SECRET = process.env.JWT_SECRET;
+
+// Check for critical env vars
+if (!JWT_SECRET) {
+  console.error("❌ FATAL ERROR: JWT_SECRET is not defined in environment variables.");
+  process.exit(1);
+}
+
 app.use(express.json({ limit: '50mb' }));
-app.use(cors());
+
+// CORS: Allow your Vercel frontend and Localhost
+const allowedOrigins = [
+  "http://localhost:5173", // Local frontend
+  "https://chat-gpt-clone-six-alpha.vercel.app", // Your Vercel App
+  process.env.CLIENT_URL // Optional: Add via env var
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      // Optional: Relax this for development if needed, but strict is safer
+      // return callback(null, true); 
+      return callback(new Error('The CORS policy for this site does not allow access from the specified Origin.'), false);
+    }
+    return callback(null, true);
+  },
+  credentials: true
+}));
 
 const upload = multer({ 
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 } 
 });
-
-const JWT_SECRET = process.env.JWT_SECRET || 'rahul_kumar_rai_secret_key';
 
 // --- DATABASE CONNECTION ---
 connectDB();
@@ -76,7 +103,13 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // --- CHAT ROUTES ---
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// Initialize Gemini only if key exists
+let genAI;
+if (process.env.GEMINI_API_KEY) {
+  genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+} else {
+  console.error("❌ GEMINI_API_KEY is missing!");
+}
 
 function fileToGenerativePart(buffer, mimeType) {
   return {
@@ -92,17 +125,21 @@ app.post('/api/chat', optionalAuth, upload.single('file'), async (req, res) => {
     const { message, conversationId } = req.body;
     const file = req.file;
 
-    if (!process.env.GEMINI_API_KEY) {
-        return res.status(500).json({ error: "GEMINI_API_KEY is missing" });
+    if (!genAI) {
+        return res.status(500).json({ error: "Server Error: AI Service Unavailable" });
     }
 
-    // Using gemini-2.5-flash as per your request, ensure you have access or fallback to 1.5
+    // UPDATED: Using stable model version
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     let promptParts = [];
     if (message) promptParts.push(message);
     if (file) {
         promptParts.push(fileToGenerativePart(file.buffer, file.mimetype));
+    }
+
+    if (promptParts.length === 0) {
+      return res.status(400).json({ error: "Message or file is required" });
     }
 
     const result = await model.generateContent(promptParts);
@@ -135,7 +172,7 @@ app.post('/api/chat', optionalAuth, upload.single('file'), async (req, res) => {
     res.json({ text: botResponse });
   } catch (error) {
     console.error("🔴 Server Error:", error);
-    res.status(500).json({ error: error.message }); 
+    res.status(500).json({ error: error.message || "AI Generation Failed" }); 
   }
 });
 
@@ -168,14 +205,17 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-const client = new OAuth2Client("302999478006-b74kqht2au61f4u9kqnakeadn31fil9u.apps.googleusercontent.com");
+// GOOGLE LOGIN SETUP
+
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const client = new OAuth2Client(GOOGLE_CLIENT_ID);
 
 app.post('/api/auth/google-login', async (req, res) => {
   try {
     const { token } = req.body;
     const ticket = await client.verifyIdToken({
       idToken: token,
-      audience: "302999478006-b74kqht2au61f4u9kqnakeadn31fil9u.apps.googleusercontent.com",
+      audience: GOOGLE_CLIENT_ID,
     });
     const payload = ticket.getPayload();
     const email = payload['email'];
@@ -190,6 +230,7 @@ app.post('/api/auth/google-login', async (req, res) => {
     const jwtToken = jwt.sign({ id: user._id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ token: jwtToken, email: user.email });
   } catch (error) {
+    console.error("Google Auth Error:", error);
     res.status(400).json({ error: "Google verification failed" });
   }
 });
@@ -204,22 +245,35 @@ app.post('/api/auth/forgot-password', async (req, res) => {
   user.resetPasswordExpires = Date.now() + 3600000;
   await user.save();
 
+  // Change localhost to your deployed frontend URL for production emails
+  const resetLink = `https://chat-gpt-clone-six-alpha.vercel.app/reset-password/${token}`;
+
   await transporter.sendMail({
     to: user.email,
     subject: 'Reset Password',
-    text: `Reset link: http://localhost:5173/reset-password/${token}`
+    text: `Click the link to reset your password: ${resetLink}`
   });
   res.json({ message: "Reset link sent!" });
 });
 
 app.post('/api/auth/reset-password', async (req, res) => {
   const { token, newPassword } = req.body;
+  
+  // Verify token first to get user ID
+  let decoded;
+  try {
+    decoded = jwt.verify(token, JWT_SECRET);
+  } catch (e) {
+    return res.status(400).json({ error: "Invalid or expired token" });
+  }
+
   const user = await User.findOne({
+    _id: decoded.id,
     resetPasswordToken: token,
     resetPasswordExpires: { $gt: Date.now() }
   });
 
-  if (!user) return res.status(400).json({ error: "Invalid Token" });
+  if (!user) return res.status(400).json({ error: "Invalid Token details" });
 
   user.password = await bcrypt.hash(newPassword, 10);
   user.resetPasswordToken = undefined;
@@ -229,4 +283,4 @@ app.post('/api/auth/reset-password', async (req, res) => {
   res.json({ message: "Password updated" });
 });
 
-const PORT = process.env.PORT || 10000; // Use Render's port or fallback to 5000 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
