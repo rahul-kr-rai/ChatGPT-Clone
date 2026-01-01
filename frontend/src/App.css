@@ -466,7 +466,7 @@ html, body, #root {
   
   /* Adjust Message Padding for Mobile */
   .msg-row { padding: 10px 16px; }
-  .msg-row.bot { padding-left: 0; }
+  .msg-row.bot { padding-left: 10px; }
   .msg-wrapper { max-width: 85%; } 
   .hero-landing h1 { font-size: 32px; }
 
