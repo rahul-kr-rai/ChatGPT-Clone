@@ -1,0 +1,62 @@
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnp/
+.pnp.js
+
+# Environment files
+/frontend/.env
+/backend/.env
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Logs
+/logs
+*.log
+*.log.*
+
+# Build outputs
+/dist
+/build
+/out
+/.parcel-cache
+/.cache
+/.turbo
+/.next
+/.vercel
+/.vercel/*
+/.vite
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Editor/IDE
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Misc
+.eslintcache
+.DS_Store
+Thumbs.db
+
+# Database
+*.sqlite
+*.sqlite3
+
+# Ignore local OS files
+ehthumbs.db
+
