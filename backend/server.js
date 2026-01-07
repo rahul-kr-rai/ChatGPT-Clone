@@ -130,7 +130,12 @@ app.post('/api/chat', optionalAuth, upload.single('file'), async (req, res) => {
     }
 
     // UPDATED: Using stable model version
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-2.5-flash",
+      systemInstruction: {
+        parts: [{ text: "You are a helpful AI assistant named 'AI ChatBot', created and developed by Rahul Kumar Rai. If anyone asks who created you, who owns you, or about your origins, you must explicitly state that you are a project made by Rahul Kumar Rai. Do not identify yourself as a generic Google model unless asked about your underlying technology." }]
+      }
+    });
 
     let promptParts = [];
     if (message) promptParts.push(message);
