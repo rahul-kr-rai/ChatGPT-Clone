@@ -1,6 +1,6 @@
 # Contributing to ChatBoat
 
-Thank you for your interest in contributing to ChatBoat! We welcome contributions from everyone. This guide will help you understand our contribution process.
+Thank you for your interest in contributing to ChatGPT-Clone! We welcome contributions from everyone. This guide will help you understand our contribution process.
 
 ## Table of Contents
 
@@ -17,14 +17,14 @@ Thank you for your interest in contributing to ChatBoat! We welcome contribution
 
 ### 1. Fork the Repository
 
-- Click the "Fork" button on the [GitHub repository page](https://github.com/yourusername/chatboat)
+- Click the "Fork" button on the [GitHub repository page](https://github.com/rahul-kr-rai/ChatGPT-Clone)
 - This creates a copy under your GitHub account
 
 ### 2. Clone Your Fork
 
 ```bash
-git clone https://github.com/rahul-kr-rai/chatboat.git
-cd chatboat
+git clone https://github.com/rahul-kr-rai/ChatGPT-Clone.git
+cd ChatGPT-Clone
 ```
 
 ### 3. Add Upstream Remote
@@ -32,11 +32,30 @@ cd chatboat
 Keep your fork synced with the original repository:
 
 ```bash
-git remote add upstream https://github.com/ORIGINAL_OWNER/chatboat.git
+git remote add upstream https://github.com/rahul-kr-rai/ChatGPT-Clone.git
 git fetch upstream
 ```
 
-### 4. Install Dependencies
+### 4. Set Up Environment Variables
+
+**Backend (.env):**
+```bash
+cd backend
+cp .env.example .env  # If available, or create manually
+# Add your configuration:
+MONGODB_URI=mongodb://localhost:27017/chatgpt-clone
+JWT_SECRET=your_jwt_secret_here
+PORT=5000
+```
+
+**Frontend (.env):**
+```bash
+cd ../frontend
+cp .env.example .env  # If available, or create manually
+VITE_API_URL=http://localhost:5000
+```
+
+### 5. Install Dependencies
 
 ```bash
 # Backend
@@ -117,13 +136,18 @@ cd backend
 npm start
 ```
 
-**Frontend:**
+**Frontend (Vite):**
 ```bash
 cd frontend
 npm run dev
-# Check for lint errors
+# Check for lint errors in a new terminal
 npm run lint
 ```
+
+**Full Stack Test:**
+- Backend should be running on `http://localhost:5000`
+- Frontend (Vite dev server) should be running on `http://localhost:5173`
+- Open your browser and test the chat functionality
 
 ---
 
@@ -137,7 +161,7 @@ git push origin feature/amazing-feature
 
 ### Step 2: Create a Pull Request
 
-1. Go to the original [repository](https://github.com/yourusername/chatboat)
+1. Go to the original [repository](https://github.com/rahul-kr-rai/ChatGPT-Clone)
 2. Click "Compare & pull request" or "New Pull Request"
 3. Ensure the base branch is `main` and compare branch is your feature branch
 4. Fill out the PR template:
@@ -291,7 +315,7 @@ Before submitting, verify:
 
 ### Before Reporting
 
-1. Check [existing issues](https://github.com/yourusername/chatboat/issues)
+1. Check [existing issues](https://github.com/rahul-kr-rai/ChatGPT-Clone/issues)
 2. Search for similar problems
 3. Try to reproduce with the latest code
 
@@ -394,14 +418,14 @@ Any other information.
 # Backend
 cd backend
 npm start              # Start development server
-npm run lint          # Lint code (if available)
-
-# Frontend
-cd frontend
-npm run dev           # Start dev server
-npm run build         # Create production build
 npm run lint          # Check code quality
-npm run preview       # Preview production build
+
+# Frontend (Vite)
+cd frontend
+npm run dev           # Start Vite dev server (default: http://localhost:5173)
+npm run build         # Create production build
+npm run lint          # Check code quality (ESLint)
+npm run preview       # Preview production build locally
 ```
 
 ### Debugging
@@ -425,8 +449,10 @@ debugger; // Browser will pause here
 ### Database
 
 - Use MongoDB locally or MongoDB Atlas for development
-- Keep a separate `.env` file with test credentials
-- Document any schema changes
+- Keep a separate `.env` file with test credentials (never commit actual credentials)
+- Document any schema changes in your PR description
+- Update relevant model files in `backend/models/` if schema changes
+- Test your changes with a fresh database before submitting PR
 
 ---
 
@@ -436,7 +462,7 @@ debugger; // Browser will pause here
 - 📋 See [INSTALLATION.md](INSTALLATION.md) for detailed setup
 - 🔌 Check [API.md](API.md) for API documentation
 - 💬 Open an issue with the `question` label
-- 📧 Contact maintainers at support@chatboat.dev
+- 📧 Contact maintainers through GitHub issues
 
 ---
 
@@ -451,4 +477,4 @@ By participating, you agree to:
 
 ---
 
-**Thank you for contributing to ChatBoat!** 🚀
+**❤️Thank you for contributing to ChatGPT-Clone!** 🚀
