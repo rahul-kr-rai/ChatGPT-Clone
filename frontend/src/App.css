@@ -218,9 +218,9 @@ html, body, #root {
 /* --- Messages --- */
 .msg-row { width: 100%; display: flex; padding: 12px 24px; }
 .msg-row.user { justify-content: flex-end; }
-.msg-row.bot { justify-content: flex-start; padding-left: 20rem; /* Desktop padding */ }
+.msg-row.bot { justify-content: flex-start; padding-left: 250px; /* Desktop padding */ }
 
-.msg-wrapper { max-width: 70%; width: fit-content; display: flex; }
+.msg-wrapper { max-width: 80%; width: fit-content; display: flex; }
 
 .text-box {
   line-height: 1.6;
