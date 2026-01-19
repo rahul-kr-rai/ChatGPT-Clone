@@ -1,3 +1,8 @@
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import remarkGfm from 'remark-gfm';
+import { Copy, Check } from 'lucide-react';
+
 import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { IoSend } from "react-icons/io5"; 
@@ -445,7 +450,25 @@ function App() {
                   <div key={i} className={`msg-row ${msg.role}`}>
                     <div className="msg-wrapper">
                       <div className="text-box">
-                        <ReactMarkdown>{msg.text}</ReactMarkdown>
+                        <ReactMarkdown
+  remarkPlugins={[remarkGfm]}
+  components={{
+    code({ node, inline, className, children, ...props }) {
+      const match = /language-(\w+)/.exec(className || '');
+      const codeContent = String(children).replace(/\n$/, '');
+
+      return !inline && match ? (
+        <CodeBlock language={match[1]} value={codeContent} />
+      ) : (
+        <code className={className} {...props}>
+          {children}
+        </code>
+      );
+    }
+  }}
+>
+  {msg.text}
+</ReactMarkdown>
                       </div>
                     </div>
                   </div>
@@ -599,5 +622,34 @@ function App() {
     </div>
   );
 }
+
+const CodeBlock = ({ language, value }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="code-block-wrapper">
+      <div className="code-header">
+        <span className="lang-label">{language || 'code'}</span>
+        <button onClick={handleCopy} className="copy-btn">
+          {copied ? <Check size={14} /> : <Copy size={14} />}
+          {copied ? 'Copied!' : 'Copy code'}
+        </button>
+      </div>
+      <SyntaxHighlighter 
+        language={language} 
+        style={vscDarkPlus} 
+        customStyle={{ margin: 0, padding: '15px', background: 'transparent' }}
+      >
+        {value}
+      </SyntaxHighlighter>
+    </div>
+  );
+};
 
 export default App;

@@ -177,15 +177,15 @@ html, body, #root {
   position: relative; 
   background: var(--bg-body); 
   width: 100%; 
-  height: 100%; /* FIX: Ensure it fills parent height */
+  height: 100%; 
 }
 
 .scrollable-messages {
   flex: 1;
-  display: flex;          /* FIX: Enable flex for children (Landing Page) */
-  flex-direction: column; /* FIX: Stack messages vertically */
+  display: flex;          
+  flex-direction: column; 
   overflow-y: auto;
-  padding: 0;             /* FIX: Remove large padding to allow centering */
+  padding: 0;             
   scrollbar-width: none;
 }
 .scrollable-messages::-webkit-scrollbar { display: none; }
@@ -200,19 +200,19 @@ html, body, #root {
 .hero-landing { 
   flex: 1; 
   display: flex; 
-  flex-direction: column; /* FIX: Ensure column layout */
+  flex-direction: column; 
   align-items: center; 
   justify-content: center; 
   text-align: center; 
   color: var(--text-main); 
   padding: 0 20px; 
-  min-height: 0;         /* FIX: Prevent overflow bugs */
+  min-height: 0;         
 }
 
 .hero-landing h1 { 
   font-size: 48px; 
   font-weight: 700; 
-  margin: 0;             /* FIX: Remove bottom margin to center perfectly */
+  margin: 0;             
 }
 
 /* --- Messages --- */
@@ -222,51 +222,134 @@ html, body, #root {
 
 .msg-wrapper { max-width: 80%; width: fit-content; display: flex; }
 
+/* ==========================================================================
+   PROFESSIONAL CHATBOT TYPOGRAPHY & FORMATTING (UPDATED SECTION)
+   ========================================================================== */
+
 .text-box {
-  line-height: 1.6;
-  font-size: 16px;
+  line-height: 1.75;           /* Relaxed line height for readability */
+  font-size: 16px;             /* Standard readable size */
   color: var(--text-main);
-  
-  /* FORCE WRAPPING: Prevents horizontal scrolling */
-  overflow-wrap: break-word;
-  word-break: break-word;
-  
-  /* NEW: Ensures it respects the parent wrapper's width */
   width: 100%;
-  min-width: 0; 
   
+  /* IMPORTANT: Prevents layout breaking on long words */
+  overflow-wrap: break-word;   
+  word-break: break-word;      
+  
+  /* Padding for bubbles */
   padding: 5px 10px;
   border-radius: 18px;
-}
-/* --- Markdown Content Fixes --- */
-
-/* Ensure code blocks (often used in Gemini answers) wrap on mobile */
-/* --- Fix for Code Blocks & Tables Overflowing --- */
-
-.text-box pre {
-  white-space: pre-wrap;       /* Wraps code lines to next line */
-  word-wrap: break-word;       /* Breaks long strings */
-  max-width: 100%;             /* strict limit */
-  overflow-x: hidden;          /* No horizontal scroll */
-  background: rgb(47,47,47);
-  padding: 10px;
-  border-radius: 8px;
-  margin: 10px 0;
+  
+  /* Ensure it doesn't overflow parent */
+  min-width: 0;
 }
 
-.text-box code {
-  white-space: pre-wrap;
-  word-break: break-word;
+/* 1. HEADINGS */
+.text-box h1, 
+.text-box h2, 
+.text-box h3, 
+.text-box h4 {
+  font-weight: 600;
+  color: var(--text-main);
+  margin-top: 24px;       
+  margin-bottom: 12px;
+  line-height: 1.3;
 }
+.text-box h1 { font-size: 1.6em; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; }
+.text-box h2 { font-size: 1.4em; }
+.text-box h3 { font-size: 1.2em; }
+.text-box h4 { font-size: 1.1em; }
+.text-box *:first-child { margin-top: 0; } /* Remove top margin from first element */
 
-/* Remove default paragraph margins to save space */
+/* 2. PARAGRAPHS & LISTS */
 .text-box p {
-  margin: 5px 0;
+  margin: 0 0 16px 0;
 }
-.text-box p:first-child { margin-top: 0; }
 .text-box p:last-child { margin-bottom: 0; }
+
+.text-box ul, 
+.text-box ol {
+  margin: 8px 0 16px 20px; 
+  padding-left: 10px;
+}
+.text-box li {
+  margin-bottom: 6px; 
+}
+.text-box li > ul,
+.text-box li > ol {
+  margin-top: 6px;
+  margin-bottom: 0;
+}
+
+/* 3. BLOCKQUOTES (Vertical Bar Look) */
+.text-box blockquote {
+  border-left: 4px solid #10a37f; 
+  margin: 16px 0;
+  padding: 4px 0 4px 20px;
+  background: transparent;
+  color: var(--text-secondary); 
+  font-style: italic;
+}
+
+/* 4. TABLES (Professional Data Display) */
+.text-box table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 20px 0;
+  font-size: 14px;
+  border-radius: 6px;
+  overflow: hidden; 
+  border: 1px solid var(--border-color);
+  display: block;      
+  overflow-x: auto;    
+}
+.text-box thead {
+  background-color: rgba(128, 128, 128, 0.1); 
+}
+.text-box th, 
+.text-box td {
+  padding: 12px 15px;
+  border: 1px solid var(--border-color); 
+  text-align: left;
+}
+.text-box th {
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.8em;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+.text-box tr:nth-child(even) {
+  background-color: rgba(128, 128, 128, 0.03); 
+}
+
+/* 5. INLINE CODE (e.g. `npm install`) */
+/* Targets code inside text paragraphs, NOT large code blocks */
+.text-box :not(pre) > code {
+  font-family: 'Consolas', 'Menlo', monospace;
+  font-size: 0.85em;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background-color: rgba(128, 128, 128, 0.15); 
+  color: #ff5252; /* Red accent for code */
+}
+[data-theme="dark"] .text-box :not(pre) > code {
+  color: #ffab70; /* Brighter orange/red for dark mode */
+}
+
+/* 6. LINKS & BOLD */
+.text-box a { color: #10a37f; text-decoration: none; font-weight: 500; }
+.text-box a:hover { text-decoration: underline; }
+.text-box strong { font-weight: 700; color: var(--text-main); }
+.text-box hr { border: none; border-top: 1px solid var(--border-color); margin: 24px 0; }
+
+/* Bubble Colors */
 .user .text-box { background-color: var(--bg-msg-user); border-radius: 22px 0px 22px 22px; color: var(--text-main); padding: 8px 20px; }
 .bot .text-box { background-color: transparent; padding-left: 0; color: var(--text-main); }
+
+/* ==========================================================================
+   END FORMATTING SECTION
+   ========================================================================== */
 
 /* --- Input Section --- */
 .input-fixed-bottom {
@@ -287,7 +370,7 @@ html, body, #root {
   background-color: var(--bg-input);
   border: 1px solid var(--border-color); 
   border-radius: 50px; 
-  padding: 14px 22px;     /* FIX: Increased padding for bigger input box */
+  padding: 14px 22px;     
   box-shadow: 0 10px 20px var(--shadow-color);
   position: relative; 
 }
@@ -364,8 +447,8 @@ html, body, #root {
   color: var(--text-main); 
   font-size: 16px; 
   outline: none; 
-  padding: 4px 0;      /* FIX: Adjusted inner padding */
-  min-height: 24px;    /* FIX: Ensure min-height prevents collapse */
+  padding: 4px 0;      
+  min-height: 24px;    
   line-height: 1.5;
   max-height: 40vh; 
   resize: none; 
@@ -376,11 +459,11 @@ html, body, #root {
 
 .input-tools { display: flex; align-items: center; gap: 12px; margin-left: 10px;}
 
-/* --- Mic Tool & Pulse Effect (UPDATED) --- */
+/* --- Mic Tool & Pulse Effect --- */
 .mic-tool { 
   color: var(--icon-color); 
   cursor: pointer; 
-  padding: 10px; /* Increased padding for better ring effect */
+  padding: 10px; 
   border-radius: 50%; 
   display: flex; 
   align-items: center;
@@ -390,21 +473,15 @@ html, body, #root {
 .mic-tool:hover { background-color: var(--bg-hover); color: var(--text-main); }
 
 .active-mic {
-  color: #10A37F !important; /* Force Red */
+  color: #10A37F !important; /* Force Green */
   background-color: rgba(77, 255, 107, 0.1);
   animation: pulse-ring 1.5s infinite;
 }
 
 @keyframes pulse-ring {
-  0% {
-    box-shadow: 0 0 0 0 #10A37F;
-  }
-  70% {
-    box-shadow: 0 0 0 10px rgba(255, 77, 77, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(255, 77, 77, 0);
-  }
+  0% { box-shadow: 0 0 0 0 #10A37F; }
+  70% { box-shadow: 0 0 0 10px rgba(255, 77, 77, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 77, 77, 0); }
 }
 
 .send-tool {
@@ -468,7 +545,21 @@ html, body, #root {
 .social-divider span { background: var(--bg-sidebar); padding: 0 10px; color: var(--text-secondary); }
 
 .forgot-link { color: #10a37f; font-size: 13px; text-align: right; cursor: pointer; margin: -5px 0 15px 0; display: block; }
-.thinking-text { color: var(--text-secondary); font-style: italic; font-size: 14px; display: flex; align-items: center; }
+
+/* Thinking Animation (Enhanced) */
+.thinking-text { 
+  color: var(--text-secondary); 
+  font-style: italic; 
+  font-size: 14px; 
+  display: flex; 
+  align-items: center;
+  animation: pulse-opacity 1.5s infinite ease-in-out; 
+}
+@keyframes pulse-opacity {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
+}
 
 /* --- RESPONSIVE MEDIA QUERIES --- */
 @media (max-width: 768px) {
@@ -478,23 +569,21 @@ html, body, #root {
   /* Navbar Container: Tighter padding for mobile */
   .top-navbar {
     padding: 0 10px;
-    gap: 8px; /* Control spacing between Brand and Actions */
+    gap: 8px; 
   }
 
-  /* Navbar Adjustments */
   .nav-brand { 
     font-size: 1rem; 
-    white-space: nowrap; /* FIX: Prevents "AI ChatBot..." from breaking */
+    white-space: nowrap; 
     overflow: hidden;
-    text-overflow: ellipsis; /* Adds "..." if screen is too small */
+    text-overflow: ellipsis; 
     flex: 1; 
     min-width: 0; 
   }
   
-  /* Action Buttons Container */
   .nav-actions {
-    gap: 8px; /* Reduce gap */
-    flex-shrink: 0; /* Ensure buttons don't get crushed */
+    gap: 8px; 
+    flex-shrink: 0; 
   }
 
   .signup-trigger { padding: 6px 12px; font-size: 13px; }
@@ -505,13 +594,12 @@ html, body, #root {
     position: fixed;
     left: 0; top: 0; bottom: 0;
     z-index: 1000;
-    transform: translateX(-100%); /* Hidden by default */
-    width: 80%; /* Takes mostly full width on very small screens */
+    transform: translateX(-100%); 
+    width: 80%; 
     max-width: 300px;
     box-shadow: 4px 0 15px rgba(0,0,0,0.5);
   }
   
-  /* Class to open sidebar */
   .chat-sidebar.open {
     transform: translateX(0);
   }
@@ -524,7 +612,7 @@ html, body, #root {
     backdrop-filter: blur(2px);
   }
 
-  /* Sidebar Header Mobile (Title + Close Btn) */
+  /* Sidebar Header Mobile */
   .sidebar-header-mobile {
     display: flex;
     justify-content: space-between;
@@ -545,80 +633,89 @@ html, body, #root {
     padding: 4px; display: flex; align-items: center;
   }
 
-  /* Adjust Chat View to take full width */
-  .chat-view {
-    width: 100%;
-  }
+  .chat-view { width: 100%; }
   
   /* Adjust Message Padding for Mobile */
   .msg-row { padding: 10px 16px; }
   .msg-row.bot { padding-left: 25px; }
   .msg-wrapper { max-width: 95%;  } 
   
-  .hero-landing h1 { 
-    font-size: 32px; 
-    /* NOTE: Margin 0 is inherited from main block, so it stays centered */
-  }
+  .hero-landing h1 { font-size: 32px; }
 
-  /* Auth Card Mobile */
   .auth-card { max-width: 90%; }
   .input-fixed-bottom { padding: 10px; }
   
   .input-pill-container { 
     width: 95%;
     border-radius: 50px; 
-    padding: 12px 18px; /* FIX: Comfortable padding for mobile */
+    padding: 12px 18px; 
   }
 }
 
-/* --- EXTRA SMALL DEVICES (Galaxy Fold Cover, S8+) --- */
+/* --- EXTRA SMALL DEVICES --- */
 @media (max-width: 380px) {
-  .nav-brand {
-    font-size: 0.9rem; /* Shrink text slightly */
-  }
-  
-  .nav-brand .arrow {
-    display: none; /* Hide the dropdown arrow to save space */
-  }
-
-  .nav-actions {
-    gap: 4px; /* Minimal gap */
-  }
-
-  .login-trigger { 
-    padding: 4px 6px; 
-    border: none; /* Remove border to reduce visual clutter */
-    font-size: 12px;
-  }
-  
-  .signup-trigger { 
-    padding: 5px 10px; 
-    font-size: 12px;
-  }
+  .nav-brand { font-size: 0.9rem; }
+  .nav-brand .arrow { display: none; }
+  .nav-actions { gap: 4px; }
+  .login-trigger { padding: 4px 6px; border: none; font-size: 12px; }
+  .signup-trigger { padding: 5px 10px; font-size: 12px; }
 }
 
 /* --- SweetAlert2 Theme Overrides --- */
-
-/* Fix: Ensure SweetAlert sits ON TOP of Auth Overlay (2000) */
-div:where(.swal2-container) {
-  z-index: 3000 !important;
-}
-
-/* Ensure the popup inputs match the theme correctly */
+div:where(.swal2-container) { z-index: 3000 !important; }
 div:where(.swal2-container) .swal2-input {
   background: var(--bg-input) !important;
   color: var(--text-main) !important;
   border: 1px solid var(--border-color) !important;
   box-shadow: none !important;
 }
-div:where(.swal2-container) .swal2-input:focus {
-  border-color: #10a37f !important;
-}
-/* Ensure close button and other text matches */
-div:where(.swal2-container) .swal2-close {
-  color: var(--text-main) !important;
-}
+div:where(.swal2-container) .swal2-input:focus { border-color: #10a37f !important; }
+div:where(.swal2-container) .swal2-close { color: var(--text-main) !important; }
 div:where(.swal2-container) .swal2-html-container,
-div:where(.swal2-container) .swal2-title {
-  color: var(--text-main) !important;
+div:where(.swal2-container) .swal2-title { color: var(--text-main) !important; }
+
+/* --- ChatGPT-Style Code Blocks --- */
+.code-block-wrapper {
+  background-color: #0d0d0d; 
+  border-radius: 8px;
+  margin: 15px 0;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
 }
+
+.code-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #2d2d2d; 
+  padding: 6px 16px;
+  color: #b4b4b4;
+  font-size: 12px;
+  user-select: none;
+}
+
+.lang-label { text-transform: lowercase; }
+
+.copy-btn {
+  background: transparent;
+  border: none;
+  color: #b4b4b4;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+.copy-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: #fff; }
+
+.code-block-wrapper pre { margin: 0 !important; border-radius: 0 0 8px 8px !important; }
+
+/* Light Mode Overrides for Code */
+[data-theme="light"] .code-block-wrapper { background-color: #f7f7f7; border: 1px solid #ccc; }
+[data-theme="light"] .code-header { background-color: #e0e0e0; color: #555; }
+[data-theme="light"] .copy-btn { color: #555; }
+[data-theme="light"] .copy-btn:hover { background-color: rgba(0,0,0,0.05); color: #000; }
