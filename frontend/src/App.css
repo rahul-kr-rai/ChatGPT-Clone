@@ -223,8 +223,43 @@ html, body, #root {
 .msg-wrapper { max-width: 70%; display: flex; }
 
 .text-box {
-  line-height: 1.6; font-size: 16px; color: var(--text-main); overflow-wrap: break-word; padding: 5px 10px; border-radius: 18px;
+  line-height: 1.6; 
+  font-size: 16px; 
+  color: var(--text-main); 
+  
+  /* FORCE WRAPPING: */
+  overflow-wrap: break-word; 
+  word-break: break-word;    /* Added: Forces long technical words to break */
+  min-width: 0;              /* Added: Allows flex container to shrink properly */
+  
+  padding: 5px 10px; 
+  border-radius: 18px;
 }
+/* --- Markdown Content Fixes --- */
+
+/* Ensure code blocks (often used in Gemini answers) wrap on mobile */
+.text-box pre {
+  white-space: pre-wrap;      /* Wraps code lines instead of scrolling */
+  word-wrap: break-word;      /* Breaks long strings inside code */
+  max-width: 100%;            /* Prevents overflowing the bubble */
+  overflow-x: hidden;         /* Hides any residual horizontal scroll */
+  background: rgba(0,0,0,0.2); /* Optional: slight background for code blocks */
+  padding: 10px;
+  border-radius: 8px;
+  margin: 10px 0;
+}
+
+.text-box code {
+  white-space: pre-wrap;      /* Wraps inline code */
+  word-break: break-word;
+}
+
+/* Remove default paragraph margins to save space */
+.text-box p {
+  margin: 5px 0;
+}
+.text-box p:first-child { margin-top: 0; }
+.text-box p:last-child { margin-bottom: 0; }
 .user .text-box { background-color: var(--bg-msg-user); border-radius: 22px 0px 22px 22px; color: var(--text-main); padding: 8px 20px; }
 .bot .text-box { background-color: transparent; padding-left: 0; color: var(--text-main); }
 
