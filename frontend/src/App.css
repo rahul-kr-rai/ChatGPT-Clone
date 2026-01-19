@@ -638,7 +638,7 @@ html, body, #root {
   /* Adjust Message Padding for Mobile */
   .msg-row { padding: 10px 16px; }
   .msg-row.bot { padding-left: 25px; }
-  .msg-wrapper { max-width: 95%;  } 
+  .msg-wrapper { max-width: 100%;  } 
   
   .hero-landing h1 { font-size: 32px; }
 
@@ -715,7 +715,46 @@ div:where(.swal2-container) .swal2-title { color: var(--text-main) !important; }
 .code-block-wrapper pre { margin: 0 !important; border-radius: 0 0 8px 8px !important; }
 
 /* Light Mode Overrides for Code */
-[data-theme="light"] .code-block-wrapper { background-color: #f7f7f7; border: 1px solid #ccc; }
-[data-theme="light"] .code-header { background-color: #e0e0e0; color: #555; }
-[data-theme="light"] .copy-btn { color: #555; }
-[data-theme="light"] .copy-btn:hover { background-color: rgba(0,0,0,0.05); color: #000; }
+[data-theme="light"] .code-block-wrapper { 
+  background-color: #f7f7f7; 
+  border: 1px solid #ccc; 
+}
+
+[data-theme="light"] .code-header { 
+  background-color: #e0e0e0; 
+  color: #555; 
+}
+
+[data-theme="light"] .copy-btn { 
+  color: #555; 
+}
+
+[data-theme="light"] .copy-btn:hover { 
+  background-color: rgba(0,0,0,0.05); 
+  color: #000; 
+}
+
+
+/* FIX: Added color property to ensure text is visible on white background */
+[data-theme="light"] .code-block-wrapper pre,
+[data-theme="light"] .code-block-wrapper pre code { 
+  background-color: #fff !important; 
+  color: #212121 !important;
+}
+
+/* --- FORCE OVERRIDE FOR INLINE STYLES --- */
+
+/* 1. Functions & Methods */
+/* Targets any span that has the specific yellow color style */
+span[style*="220, 220, 170"], 
+span[style*="220,220,170"] {
+  color: #da9f00 !important;
+}
+
+/* 2. Strings */
+/* Targets any span that has the specific orange-brown color style */
+span[style*="206, 145, 120"], 
+span[style*="206,145,120"] {
+  color: rgb(210, 85, 34) !important;
+}
+/* --- End of App.css --- */
