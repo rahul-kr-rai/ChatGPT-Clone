@@ -220,37 +220,42 @@ html, body, #root {
 .msg-row.user { justify-content: flex-end; }
 .msg-row.bot { justify-content: flex-start; padding-left: 20rem; /* Desktop padding */ }
 
-.msg-wrapper { max-width: 70%; display: flex; }
+.msg-wrapper { max-width: 70%; width: fit-content; display: flex; }
 
 .text-box {
-  line-height: 1.6; 
-  font-size: 16px; 
-  color: var(--text-main); 
+  line-height: 1.6;
+  font-size: 16px;
+  color: var(--text-main);
   
-  /* FORCE WRAPPING: */
-  overflow-wrap: break-word; 
-  word-break: break-word;    /* Added: Forces long technical words to break */
-  min-width: 0;              /* Added: Allows flex container to shrink properly */
+  /* FORCE WRAPPING: Prevents horizontal scrolling */
+  overflow-wrap: break-word;
+  word-break: break-word;
   
-  padding: 5px 10px; 
+  /* NEW: Ensures it respects the parent wrapper's width */
+  width: 100%;
+  min-width: 0; 
+  
+  padding: 5px 10px;
   border-radius: 18px;
 }
 /* --- Markdown Content Fixes --- */
 
 /* Ensure code blocks (often used in Gemini answers) wrap on mobile */
+/* --- Fix for Code Blocks & Tables Overflowing --- */
+
 .text-box pre {
-  white-space: pre-wrap;      /* Wraps code lines instead of scrolling */
-  word-wrap: break-word;      /* Breaks long strings inside code */
-  max-width: 100%;            /* Prevents overflowing the bubble */
-  overflow-x: hidden;         /* Hides any residual horizontal scroll */
-  background: rgba(0,0,0,0.2); /* Optional: slight background for code blocks */
+  white-space: pre-wrap;       /* Wraps code lines to next line */
+  word-wrap: break-word;       /* Breaks long strings */
+  max-width: 100%;             /* strict limit */
+  overflow-x: hidden;          /* No horizontal scroll */
+  background: rgba(0,0,0,0.2);
   padding: 10px;
   border-radius: 8px;
   margin: 10px 0;
 }
 
 .text-box code {
-  white-space: pre-wrap;      /* Wraps inline code */
+  white-space: pre-wrap;
   word-break: break-word;
 }
 
@@ -548,7 +553,7 @@ html, body, #root {
   /* Adjust Message Padding for Mobile */
   .msg-row { padding: 10px 16px; }
   .msg-row.bot { padding-left: 25px; }
-  .msg-wrapper { max-width: 85%; } 
+  .msg-wrapper { max-width: 95%;  } 
   
   .hero-landing h1 { 
     font-size: 32px; 
