@@ -187,7 +187,7 @@ html, body, #root {
 }
 .user-profile:hover { background-color: #1a7f64; transform: scale(1.05); }
 
-.hero-landing { height: 60vh; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--text-main); padding: 0 20px; }
+.hero-landing { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--text-main); padding: 0 20px; }
 .hero-landing h1 { font-size: 48px; font-weight: 700; margin-bottom: 40px; }
 
 /* --- Messages --- */
@@ -211,6 +211,8 @@ html, body, #root {
   padding: 20px;
   flex-shrink: 0; 
   z-index: 10;
+  display: flex;
+  flex-direction: column;
   background: linear-gradient(transparent, var(--bg-input-gradient) 50%);
 }
 
