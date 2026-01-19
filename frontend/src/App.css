@@ -205,7 +205,12 @@ html, body, #root {
 
 /* --- Input Section --- */
 .input-fixed-bottom {
-  position: absolute; bottom: 0; width: 100%; padding: 20px;
+  position: relative; 
+  bottom: auto; 
+  width: 100%;
+  padding: 20px;
+  flex-shrink: 0; 
+  z-index: 10;
   background: linear-gradient(transparent, var(--bg-input-gradient) 50%);
 }
 
