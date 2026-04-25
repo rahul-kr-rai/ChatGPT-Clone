@@ -8,7 +8,7 @@ import ReactMarkdown from 'react-markdown';
 import { IoSend } from "react-icons/io5"; 
 import { 
   Paperclip, Search, GraduationCap, Image as ImageIcon, Mic, 
-  Plus, Trash2, X, Sun, Moon, Square, Menu 
+  Plus, Trash2, X, Sun, Moon, Square, Menu, AlertTriangle
 } from 'lucide-react'; 
 import Swal from 'sweetalert2';
 import { GoogleLogin } from '@react-oauth/google';
@@ -46,6 +46,9 @@ function App() {
   const [selectedFile, setSelectedFile] = useState(null);
   const fileInputRef = useRef(null);
   
+  // Popup State
+  const [showPopup, setShowPopup] = useState(false);
+  
   // Refs
   const chatEndRef = useRef(null);
   const textAreaRef = useRef(null);
@@ -58,6 +61,12 @@ function App() {
     localStorage.setItem('theme', theme);
     document.body.setAttribute('data-theme', theme);
   }, [theme]);
+
+  // --- Popup Effect ---
+  useEffect(() => {
+    const timer = setTimeout(() => setShowPopup(true), 3000);
+    return () => clearTimeout(timer);
+  }, []);
 
   // --- Click Outside to Close Attach Menu ---
   useEffect(() => {
@@ -88,7 +97,7 @@ function App() {
       .then(data => { if(Array.isArray(data)) setConversations(data); })
       .catch(err => console.error(err));
     }
-  }, [user]);
+  }, [user, API_BASE]);
 
   // Load Specific Chat History
   useEffect(() => {
@@ -110,7 +119,7 @@ function App() {
       }
     };
     loadChatHistory();
-  }, [activeConvId, user]);
+  }, [activeConvId, user, API_BASE]);
 
   // Scroll to bottom
   useEffect(() => {
@@ -453,7 +462,7 @@ function App() {
                         <ReactMarkdown
   remarkPlugins={[remarkGfm]}
   components={{
-    code({ node, inline, className, children, ...props }) {
+    code({ inline, className, children, ...props }) {
       const match = /language-(\w+)/.exec(className || '');
       const codeContent = String(children).replace(/\n$/, '');
 
@@ -615,6 +624,18 @@ function App() {
               <span className="typing-toggle" onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')}>
                 {authMode === 'login' ? 'Create an account' : 'Already have an account?'}
               </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPopup && (
+        <div className="popup-overlay" onClick={() => setShowPopup(false)}>
+          <div className="popup-card" onClick={e => e.stopPropagation()}>
+            <button className="popup-close" onClick={() => setShowPopup(false)}>×</button>
+            <div className="popup-content">
+              <AlertTriangle size={48} color="#ffcc00" />
+              <p>Heads up! This project is deployed on Render's free service, so the initial load might take a few moments.</p>
             </div>
           </div>
         </div>

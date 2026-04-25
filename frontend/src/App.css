@@ -546,6 +546,37 @@ html, body, #root {
 
 .forgot-link { color: #10a37f; font-size: 13px; text-align: right; cursor: pointer; margin: -5px 0 15px 0; display: block; }
 
+/* --- Popup Modal (Themed) --- */
+.popup-overlay { 
+  position: fixed; inset: 0; 
+  background: var(--bg-auth-overlay); 
+  display: flex; justify-content: center; align-items: center; z-index: 1500; 
+  backdrop-filter: blur(2px);
+}
+.popup-card { 
+  background: var(--bg-sidebar); 
+  padding: 50px 30px 30px 30px; border-radius: 16px; width: 400px; max-width: 90vw;
+  border: 1px solid var(--border-color); 
+  color: var(--text-main);
+  box-shadow: 0 4px 30px var(--shadow-color);
+  position: relative;
+}
+.popup-close { 
+  position: absolute; top: 5px; right: 5px; 
+  background: none; border: none; font-size: 36px; color: var(--text-secondary); 
+  cursor: pointer; 
+  padding: 0 10px; line-height: 1;
+}
+.popup-close:hover { color: var(--text-main); }
+.popup-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+}
+.popup-card p { margin: 10px 0; font-size: 18px; line-height: 1.5; color:darkgray;}
+
 /* Thinking Animation (Enhanced) */
 .thinking-text { 
   color: var(--text-secondary); 
