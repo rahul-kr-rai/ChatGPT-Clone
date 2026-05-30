@@ -15,6 +15,8 @@ const { OAuth2Client } = require('google-auth-library');
 const connectDB = require('./db');
 const User = require('./models/User');
 const Conversation = require('./models/Conversation');
+const Resume = require('./models/Resume');
+const JobApplication = require('./models/JobApplication');
 
 const app = express();
 

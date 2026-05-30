@@ -12,9 +12,9 @@ This task checklist tracks the implementation steps required to upgrade the appl
 ---
 
 ## 2. Goal 2: Backend Architecture & Database Setup
-- `[ ]` Create `backend/models/Resume.js` schema for storing ATS scores, extracted skills, and suggestions.
-- `[ ]` Create `backend/models/JobApplication.js` schema for logging applied companies, jobs, cover letters, and statuses.
-- `[ ]` Configure Mongoose model registrations and relations inside `backend/server.js`.
+- `[x]` Create `backend/models/Resume.js` schema for storing ATS scores, extracted skills, and suggestions.
+- `[x]` Create `backend/models/JobApplication.js` schema for logging applied companies, jobs, cover letters, and statuses.
+- `[x]` Configure Mongoose model registrations and relations inside `backend/server.js`.
 
 ---
 
