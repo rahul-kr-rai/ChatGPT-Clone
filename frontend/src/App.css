@@ -161,6 +161,81 @@ body,
   background: var(--bg-hover);
 }
 
+/* --- Job-Hunt Toggle Switch --- */
+.job-hunt-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: var(--bg-pill);
+  border: 1px solid var(--border-color);
+  padding: 6px 12px;
+  border-radius: 20px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.job-hunt-toggle:hover {
+  background-color: var(--bg-hover);
+}
+
+.job-hunt-toggle.active {
+  border-color: #f57c00;
+  box-shadow: 0 0 12px rgba(245, 124, 0, 0.25);
+}
+
+.job-hunt-toggle svg {
+  color: var(--icon-color);
+  transition: color 0.3s ease;
+}
+
+.job-hunt-toggle.active svg {
+  color: #f57c00;
+}
+
+.toggle-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-main);
+  transition: color 0.3s ease;
+}
+
+.job-hunt-toggle.active .toggle-label {
+  color: #f57c00;
+}
+
+.toggle-switch {
+  width: 32px;
+  height: 18px;
+  background-color: #ccc;
+  border-radius: 9px;
+  position: relative;
+  transition: background-color 0.3s ease;
+}
+
+[data-theme="dark"] .toggle-switch {
+  background-color: #555;
+}
+
+.job-hunt-toggle.active .toggle-switch {
+  background-color: #f57c00;
+}
+
+.toggle-slider {
+  width: 14px;
+  height: 14px;
+  background-color: #fff;
+  border-radius: 50%;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.job-hunt-toggle.active .toggle-slider {
+  transform: translateX(14px);
+}
+
 /* --- Sidebar --- */
 .body-container {
   display: flex;
@@ -1082,6 +1157,15 @@ body,
   .nav-actions {
     gap: 8px;
     flex-shrink: 0;
+  }
+
+  .toggle-label {
+    display: none;
+  }
+
+  .job-hunt-toggle {
+    padding: 6px 8px;
+    gap: 4px;
   }
 
   .signup-trigger {

@@ -8,7 +8,7 @@ import ReactMarkdown from 'react-markdown';
 import { IoSend } from "react-icons/io5";
 import {
   Paperclip, Search, GraduationCap, Image as ImageIcon, Mic,
-  Plus, Trash2, X, Sun, Moon, Square, Menu, AlertTriangle
+  Plus, Trash2, X, Sun, Moon, Square, Menu, AlertTriangle, Briefcase
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { GoogleLogin } from '@react-oauth/google';
@@ -50,6 +50,11 @@ function App() {
   const [showWarningCard, setShowWarningCard] = useState(false);
   const [isWarningCardClosing, setIsWarningCardClosing] = useState(false);
 
+  // Job-Hunt Mode State
+  const [jobHuntMode, setJobHuntMode] = useState(
+    localStorage.getItem('jobHuntMode') === 'true'
+  );
+
   // Refs
   const chatEndRef = useRef(null);
   const textAreaRef = useRef(null);
@@ -62,6 +67,12 @@ function App() {
     localStorage.setItem('theme', theme);
     document.body.setAttribute('data-theme', theme);
   }, [theme]);
+
+  // --- Job-Hunt Mode Effect ---
+  useEffect(() => {
+    localStorage.setItem('jobHuntMode', jobHuntMode);
+    document.body.setAttribute('data-job-hunt', jobHuntMode);
+  }, [jobHuntMode]);
 
   // --- Warning Card Effects & Trigger ---
   useEffect(() => {
@@ -418,6 +429,18 @@ function App() {
           <button className="theme-toggle-btn" onClick={toggleTheme} title="Toggle Theme">
             {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
           </button>
+
+          <div 
+            className={`job-hunt-toggle ${jobHuntMode ? 'active' : ''}`} 
+            onClick={() => setJobHuntMode(!jobHuntMode)} 
+            title="Toggle Job-Hunt Mode"
+          >
+            <Briefcase size={16} />
+            <span className="toggle-label">Job-Hunt Mode</span>
+            <div className="toggle-switch">
+              <span className="toggle-slider"></span>
+            </div>
+          </div>
 
           {!user ? (
             <>
