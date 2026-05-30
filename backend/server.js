@@ -217,6 +217,192 @@ app.delete('/api/conversations/:id', optionalAuth, async (req, res) => {
   res.json({ message: "Deleted" });
 });
 
+// --- RESUME & AUTO-APPLY ENDPOINTS ---
+
+app.post('/api/resume/evaluate', optionalAuth, upload.single('file'), async (req, res) => {
+  try {
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    if (!genAI) {
+      return res.status(500).json({ error: "AI service unavailable" });
+    }
+
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const filePart = fileToGenerativePart(file.buffer, file.mimetype);
+
+    const prompt = `
+      You are an expert ATS (Applicant Tracking System) auditor. Analyze the uploaded resume and return a structured JSON response.
+      Your output must be a valid JSON object ONLY, with no extra formatting, markdown wraps (like \`\`\`json), or explanations outside of the JSON structure.
+
+      The JSON structure MUST follow this exact schema:
+      {
+        "atsScore": number (0 to 100),
+        "jobSearchQuery": string (a short optimized 3-5 word job search query matching the candidate's core profile, e.g. "Full Stack Developer React Node"),
+        "skills": [string] (list of key skills found in the resume),
+        "missingKeywords": [string] (list of relevant industry keywords/skills that are missing or underrepresented),
+        "contentSuggestions": [string] (list of suggestions to improve the resume's content, bullet points, experience description),
+        "formattingSuggestions": [string] (list of suggestions to improve the layout, readability, and structural elements of the resume)
+      }
+    `;
+
+    const result = await model.generateContent([prompt, filePart]);
+    const responseText = result.response.text().trim();
+
+    let evaluation;
+    try {
+      const cleanedJSON = responseText.replace(/```json/i, '').replace(/```/g, '').trim();
+      evaluation = JSON.parse(cleanedJSON);
+    } catch (e) {
+      console.error("Failed to parse JSON from Gemini:", responseText);
+      return res.status(500).json({ error: "AI returned invalid response format. Please try again." });
+    }
+
+    const resumeData = new Resume({
+      userId: req.user ? req.user.id : undefined,
+      fileName: file.originalname,
+      atsScore: evaluation.atsScore || 70,
+      jobSearchQuery: evaluation.jobSearchQuery || "Software Engineer",
+      skills: evaluation.skills || [],
+      missingKeywords: evaluation.missingKeywords || [],
+      contentSuggestions: evaluation.contentSuggestions || [],
+      formattingSuggestions: evaluation.formattingSuggestions || []
+    });
+
+    await resumeData.save();
+
+    res.json({
+      success: true,
+      resume: resumeData
+    });
+  } catch (error) {
+    console.error("🔴 Resume Evaluation Error:", error);
+    res.status(500).json({ error: error.message || "Resume evaluation failed" });
+  }
+});
+
+app.post('/api/resume/auto-apply', optionalAuth, async (req, res) => {
+  try {
+    const { resumeId } = req.body;
+    if (!resumeId) {
+      return res.status(400).json({ error: "resumeId is required" });
+    }
+
+    const resume = await Resume.findById(resumeId);
+    if (!resume) {
+      return res.status(404).json({ error: "Resume record not found" });
+    }
+
+    if (!genAI) {
+      return res.status(500).json({ error: "AI service unavailable" });
+    }
+
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+    const searchPrompt = `
+      You are a job search matching agent. Based on the candidate's core profile and target search query: "${resume.jobSearchQuery}", generate exactly 3 relevant open job listings.
+      Your response must be a valid JSON array of objects ONLY, with no extra formatting, markdown wraps (like \`\`\`json), or explanations outside of the JSON.
+
+      The JSON structure MUST follow this exact schema:
+      [
+        {
+          "jobTitle": string,
+          "company": string,
+          "location": string,
+          "salary": string (e.g. "$90,000 - $110,000"),
+          "description": string (brief 2-3 sentence description of the role requirements)
+        }
+      ]
+    `;
+
+    const searchResult = await model.generateContent(searchPrompt);
+    const searchResponseText = searchResult.response.text().trim();
+
+    let jobListings = [];
+    try {
+      const cleanedSearchJSON = searchResponseText.replace(/```json/i, '').replace(/```/g, '').trim();
+      jobListings = JSON.parse(cleanedSearchJSON);
+    } catch (e) {
+      console.error("Failed to parse JSON job listings from Gemini:", searchResponseText);
+      jobListings = [
+        {
+          jobTitle: `${resume.jobSearchQuery || 'Software Engineer'}`,
+          company: "Tech Innovators Inc.",
+          location: "Remote (US/Canada)",
+          salary: "$100,000 - $120,000",
+          description: "Looking for an energetic engineer to build out core React applications and integrate robust Node.js backend services."
+        },
+        {
+          jobTitle: `Junior ${resume.jobSearchQuery || 'Developer'}`,
+          company: "Global Core Systems",
+          location: "Hybrid (New York, NY)",
+          salary: "$85,000 - $95,000",
+          description: "Seeking a developer to assist in designing high performance web interfaces, APIs, and optimizing database schema performances."
+        }
+      ];
+    }
+
+    const appliedJobs = [];
+
+    for (const job of jobListings) {
+      const coverLetterPrompt = `
+        You are a career assistant. Write a professional, customized, compelling cover letter (max 250 words) for a candidate applying to the position of "${job.jobTitle}" at "${job.company}".
+        The candidate has the following skills: ${resume.skills.join(', ')}.
+        The job description is: "${job.description}".
+        Maintain a polite, confident, and professional tone. Do not include placeholders like "[Your Name]" or "[Date]" in brackets; write it as a finished cover letter.
+      `;
+
+      const coverLetterResult = await model.generateContent(coverLetterPrompt);
+      const coverLetterText = coverLetterResult.response.text().trim();
+
+      const newApplication = new JobApplication({
+        userId: req.user ? req.user.id : undefined,
+        resumeId: resume._id,
+        jobTitle: job.jobTitle,
+        company: job.company,
+        location: job.location,
+        salary: job.salary,
+        jobUrl: `https://${job.company.toLowerCase().replace(/[^a-z0-9]/g, '')}.com/careers/apply`,
+        coverLetter: coverLetterText,
+        status: 'applied'
+      });
+
+      await newApplication.save();
+      appliedJobs.push(newApplication);
+    }
+
+    res.json({
+      success: true,
+      applications: appliedJobs
+    });
+
+  } catch (error) {
+    console.error("🔴 Auto Apply Error:", error);
+    res.status(500).json({ error: error.message || "Auto application process failed" });
+  }
+});
+
+app.get('/api/resume/history', optionalAuth, async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.json({ resumes: [], applications: [] });
+    }
+
+    const resumes = await Resume.find({ userId: req.user.id }).sort({ createdAt: -1 });
+    const applications = await JobApplication.find({ userId: req.user.id }).sort({ appliedAt: -1 });
+
+    res.json({
+      resumes,
+      applications
+    });
+  } catch (error) {
+    console.error("🔴 Fetch Resume History Error:", error);
+    res.status(500).json({ error: error.message || "Failed to retrieve history" });
+  }
+});
+
 // --- GOOGLE AUTH & PASSWORD RESET ---
 const transporter = nodemailer.createTransport({
   service: 'gmail',

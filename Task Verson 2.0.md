@@ -19,15 +19,15 @@ This task checklist tracks the implementation steps required to upgrade the appl
 ---
 
 ## 3. Goal 3: Backend API Development
-- `[ ]` Create resume parser endpoint `POST /api/resume/evaluate`:
+- `[x]` Create resume parser endpoint `POST /api/resume/evaluate`:
   - Receives resume file buffers (PDF or Text).
   - Prompts Gemini 2.5 Flash to extract ATS score, keywords, missing items, and search queries in a clean JSON format.
   - Stores the analysis in the database.
-- `[ ]` Create search & auto-apply endpoint `POST /api/resume/auto-apply`:
+- `[x]` Create search & auto-apply endpoint `POST /api/resume/auto-apply`:
   - Simulates/calls job search portal listings based on the resume's target keywords.
   - Loops over results and generates bespoke cover letters for each position using Gemini.
   - Records application entries in the database.
-- `[ ]` Create history fetch endpoint `GET /api/resume/history`:
+- `[x]` Create history fetch endpoint `GET /api/resume/history`:
   - Retrieves all historical resume analyses and job applications for the current session.
 
 ---
