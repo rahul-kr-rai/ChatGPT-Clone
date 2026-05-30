@@ -5,11 +5,11 @@ import { Copy, Check } from 'lucide-react';
 
 import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { IoSend } from "react-icons/io5"; 
-import { 
-  Paperclip, Search, GraduationCap, Image as ImageIcon, Mic, 
+import { IoSend } from "react-icons/io5";
+import {
+  Paperclip, Search, GraduationCap, Image as ImageIcon, Mic,
   Plus, Trash2, X, Sun, Moon, Square, Menu, AlertTriangle
-} from 'lucide-react'; 
+} from 'lucide-react';
 import Swal from 'sweetalert2';
 import { GoogleLogin } from '@react-oauth/google';
 import './App.css';
@@ -45,10 +45,11 @@ function App() {
   // File Upload States
   const [selectedFile, setSelectedFile] = useState(null);
   const fileInputRef = useRef(null);
-  
-  // Popup State
-  const [showPopup, setShowPopup] = useState(false);
-  
+
+  // Warning Card State
+  const [showWarningCard, setShowWarningCard] = useState(false);
+  const [isWarningCardClosing, setIsWarningCardClosing] = useState(false);
+
   // Refs
   const chatEndRef = useRef(null);
   const textAreaRef = useRef(null);
@@ -62,11 +63,28 @@ function App() {
     document.body.setAttribute('data-theme', theme);
   }, [theme]);
 
-  // --- Popup Effect ---
+  // --- Warning Card Effects & Trigger ---
   useEffect(() => {
-    const timer = setTimeout(() => setShowPopup(true), 3000);
+    const timer = setTimeout(() => setShowWarningCard(true), 2000);
     return () => clearTimeout(timer);
   }, []);
+
+  const triggerCloseWarningCard = () => {
+    setIsWarningCardClosing(true);
+    setTimeout(() => {
+      setShowWarningCard(false);
+      setIsWarningCardClosing(false);
+    }, 300);
+  };
+
+  useEffect(() => {
+    if (showWarningCard && !isWarningCardClosing) {
+      const hideTimer = setTimeout(() => {
+        triggerCloseWarningCard();
+      }, 10000); // 10 seconds
+      return () => clearTimeout(hideTimer);
+    }
+  }, [showWarningCard, isWarningCardClosing]);
 
   // --- Click Outside to Close Attach Menu ---
   useEffect(() => {
@@ -93,9 +111,9 @@ function App() {
       fetch(`${API_BASE}/api/conversations`, {
         headers: { 'Authorization': `Bearer ${user.token}` }
       })
-      .then(res => res.json())
-      .then(data => { if(Array.isArray(data)) setConversations(data); })
-      .catch(err => console.error(err));
+        .then(res => res.json())
+        .then(data => { if (Array.isArray(data)) setConversations(data); })
+        .catch(err => console.error(err));
     }
   }, [user, API_BASE]);
 
@@ -162,9 +180,9 @@ function App() {
     }
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      Swal.fire({ 
-        icon: 'error', 
-        title: 'Not Supported', 
+      Swal.fire({
+        icon: 'error',
+        title: 'Not Supported',
         text: 'Your browser does not support Voice Input. Try Chrome or Edge.',
         background: theme === 'dark' ? '#171717' : '#fff',
         color: theme === 'dark' ? '#fff' : '#000'
@@ -173,22 +191,22 @@ function App() {
     }
     const recognition = new SpeechRecognition();
     recognition.lang = 'en-US';
-    recognition.interimResults = false; 
+    recognition.interimResults = false;
     recognition.maxAlternatives = 1;
 
     recognition.onstart = () => setIsListening(true);
     recognition.onend = () => setIsListening(false);
     recognition.onerror = (e) => { console.error(e); setIsListening(false); };
-    
+
     recognition.onresult = (event) => {
       const transcript = event.results[0][0].transcript;
       setInput(prev => {
         const newData = prev + (prev.length > 0 && !prev.endsWith(' ') ? ' ' : '') + transcript;
         setTimeout(() => {
-            if(textAreaRef.current) {
-                textAreaRef.current.style.height = 'auto';
-                textAreaRef.current.style.height = `${textAreaRef.current.scrollHeight}px`;
-            }
+          if (textAreaRef.current) {
+            textAreaRef.current.style.height = 'auto';
+            textAreaRef.current.style.height = `${textAreaRef.current.scrollHeight}px`;
+          }
         }, 0);
         return newData;
       });
@@ -201,7 +219,7 @@ function App() {
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       setSelectedFile(e.target.files[0]);
-      setShowAttachMenu(false); 
+      setShowAttachMenu(false);
     }
   };
 
@@ -209,11 +227,11 @@ function App() {
     setSelectedFile(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
-  
+
   const handleStopGeneration = (e) => {
     e.preventDefault();
     if (abortControllerRef.current) {
-      abortControllerRef.current.abort(); 
+      abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
     setIsLoading(false);
@@ -222,7 +240,7 @@ function App() {
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if ((!input.trim() && !selectedFile) || isLoading) return;
-    
+
     setShowAttachMenu(false);
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -239,7 +257,7 @@ function App() {
       formData.append('message', currentMessage);
       if (activeConvId) formData.append('conversationId', activeConvId);
       if (selectedFile) formData.append('file', selectedFile);
-      
+
       const headers = {};
       if (user) headers['Authorization'] = `Bearer ${user.token}`;
 
@@ -251,7 +269,7 @@ function App() {
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      
+
       setMessages(prev => [...prev, { role: 'bot', text: data.text }]);
       clearFile();
 
@@ -260,16 +278,16 @@ function App() {
         const newChat = { _id: data.conversationId, title: currentMessage.substring(0, 30) || "File Upload" };
         setConversations(prev => [newChat, ...prev]);
       }
-    } catch (err) { 
+    } catch (err) {
       if (err.name === 'AbortError') {
         setMessages(prev => [...prev, { role: 'bot', text: "*Generation stopped by user.*" }]);
-      } else { 
-        console.error(err); 
-        setMessages(prev => [...prev, { role: 'bot', text: "Error sending message." }]); 
+      } else {
+        console.error(err);
+        setMessages(prev => [...prev, { role: 'bot', text: "Error sending message." }]);
       }
-    } finally { 
-      setIsLoading(false); 
-      abortControllerRef.current = null; 
+    } finally {
+      setIsLoading(false);
+      abortControllerRef.current = null;
     }
   };
 
@@ -295,14 +313,14 @@ function App() {
         });
         setConversations(prev => prev.filter(c => c._id !== id));
         if (activeConvId === id) { setActiveConvId(null); setMessages([]); }
-        Swal.fire({ 
-          title: 'Deleted!', 
-          text: 'Conversation has been removed.', 
-          icon: 'success', 
-          timer: 1500, 
-          showConfirmButton: false, 
-          background: theme === 'dark' ? '#171717' : '#edededff', 
-          color: theme === 'dark' ? '#fff' : '#000' 
+        Swal.fire({
+          title: 'Deleted!',
+          text: 'Conversation has been removed.',
+          icon: 'success',
+          timer: 1500,
+          showConfirmButton: false,
+          background: theme === 'dark' ? '#171717' : '#edededff',
+          color: theme === 'dark' ? '#fff' : '#000'
         });
       } catch (err) { console.error(err); }
     }
@@ -331,19 +349,19 @@ function App() {
         localStorage.setItem('user', JSON.stringify(data));
         setUser(data);
         setShowAuth(false);
-        setMessages([]); 
+        setMessages([]);
         setActiveConvId(null);
       } else if (authMode === 'signup' && res.ok) {
         alert("Registration successful! Now Login.");
         setAuthMode('login');
       } else { alert(data.error); }
-    } catch(err) { console.error(err); }
+    } catch (err) { console.error(err); }
   };
 
   const handleForgotPassword = async () => {
-    setShowAuth(false); 
-    const bgColor = theme === 'dark' ? '#171717' : '#ffffff'; 
-    const txtColor = theme === 'dark' ? '#f9f9f9' : '#333333'; 
+    setShowAuth(false);
+    const bgColor = theme === 'dark' ? '#171717' : '#ffffff';
+    const txtColor = theme === 'dark' ? '#f9f9f9' : '#333333';
 
     const { value: email, isDismissed } = await Swal.fire({
       title: 'Reset Password',
@@ -359,9 +377,9 @@ function App() {
       customClass: { popup: 'high-index-swal' },
       inputValidator: (value) => { if (!value) return 'Please enter your email address'; }
     });
-    
+
     if (isDismissed) { setShowAuth(true); return; }
-    
+
     if (email) {
       try {
         const res = await fetch(`${API_BASE}/api/auth/forgot-password`, {
@@ -373,7 +391,7 @@ function App() {
           await Swal.fire({ title: 'Email Sent!', text: `Recovery link sent to ${email}`, icon: 'success', background: bgColor, color: txtColor, confirmButtonColor: '#10a37f' });
         } else {
           await Swal.fire({ title: 'Error', text: 'Could not send email. Try again.', icon: 'error', background: bgColor, color: txtColor });
-          setShowAuth(true); 
+          setShowAuth(true);
         }
       } catch (error) { console.error(error); setShowAuth(true); }
     }
@@ -381,12 +399,12 @@ function App() {
 
   return (
     <div className="chatgpt-main" data-theme={theme}>
-      <input 
-        type="file" 
-        ref={fileInputRef} 
-        style={{ display: 'none' }} 
+      <input
+        type="file"
+        ref={fileInputRef}
+        style={{ display: 'none' }}
         onChange={handleFileChange}
-        accept="image/*,application/pdf,text/plain" 
+        accept="image/*,application/pdf,text/plain"
       />
 
       <nav className="top-navbar">
@@ -435,9 +453,9 @@ function App() {
           </button>
           <div className="conv-history">
             {user ? conversations.map(c => (
-              <div 
-                key={c._id} 
-                className={`history-item ${activeConvId === c._id ? 'active' : ''}`} 
+              <div
+                key={c._id}
+                className={`history-item ${activeConvId === c._id ? 'active' : ''}`}
                 onClick={() => setActiveConvId(c._id)}
               >
                 <span className="conv-title">{c.title}</span>
@@ -460,24 +478,24 @@ function App() {
                     <div className="msg-wrapper">
                       <div className="text-box">
                         <ReactMarkdown
-  remarkPlugins={[remarkGfm]}
-  components={{
-    code({ inline, className, children, ...props }) {
-      const match = /language-(\w+)/.exec(className || '');
-      const codeContent = String(children).replace(/\n$/, '');
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            code({ inline, className, children, ...props }) {
+                              const match = /language-(\w+)/.exec(className || '');
+                              const codeContent = String(children).replace(/\n$/, '');
 
-      return !inline && match ? (
-        <CodeBlock language={match[1]} value={codeContent} />
-      ) : (
-        <code className={className} {...props}>
-          {children}
-        </code>
-      );
-    }
-  }}
->
-  {msg.text}
-</ReactMarkdown>
+                              return !inline && match ? (
+                                <CodeBlock language={match[1]} value={codeContent} />
+                              ) : (
+                                <code className={className} {...props}>
+                                  {children}
+                                </code>
+                              );
+                            }
+                          }}
+                        >
+                          {msg.text}
+                        </ReactMarkdown>
                       </div>
                     </div>
                   </div>
@@ -520,31 +538,31 @@ function App() {
                   </button>
                 </div>
               )}
-              
+
               <form onSubmit={handleSendMessage} className="pill-form">
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   className={`attach-toggle-btn ${showAttachMenu ? 'active' : ''}`}
                   onClick={() => setShowAttachMenu(!showAttachMenu)}
                   ref={btnRef}
                 >
-                  <Plus 
-                    size={24} 
-                    style={{ 
-                      transform: showAttachMenu ? 'rotate(45deg)' : 'none', 
-                      transition: '0.2s' 
-                    }} 
+                  <Plus
+                    size={24}
+                    style={{
+                      transform: showAttachMenu ? 'rotate(45deg)' : 'none',
+                      transition: '0.2s'
+                    }}
                   />
                 </button>
 
-                <textarea 
+                <textarea
                   ref={textAreaRef}
-                  value={input} 
+                  value={input}
                   onChange={(e) => {
                     setInput(e.target.value);
-                    e.target.style.height = 'auto'; 
+                    e.target.style.height = 'auto';
                     e.target.style.height = `${e.target.scrollHeight}px`;
-                  }} 
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
@@ -553,25 +571,25 @@ function App() {
                   }}
                   placeholder={selectedFile ? "Add a caption..." : (isListening ? "Listening..." : "Ask anything")}
                   rows="1"
-                  onClick={() => setShowAttachMenu(false)} 
+                  onClick={() => setShowAttachMenu(false)}
                 />
-                
+
                 <div className="input-tools">
-                  <span 
-                    className={`mic-tool ${isListening ? 'active-mic' : ''}`} 
+                  <span
+                    className={`mic-tool ${isListening ? 'active-mic' : ''}`}
                     onClick={handleMicClick}
                     title={isListening ? "Stop listening" : "Start voice input"}
                   >
                     <Mic size={18} />
                   </span>
-                  
+
                   {isLoading ? (
                     <button type="button" className="send-tool stop-tool" onClick={handleStopGeneration} title="Stop generation">
-                      <Square size={14} fill="currentColor" /> 
+                      <Square size={14} fill="currentColor" />
                     </button>
                   ) : (
                     <button type="submit" className="send-tool" disabled={(!input.trim() && !selectedFile)}>
-                      <IoSend size={18} /> 
+                      <IoSend size={18} />
                     </button>
                   )}
                 </div>
@@ -587,8 +605,8 @@ function App() {
           <div className="auth-card" onClick={e => e.stopPropagation()}>
             <h2>{authMode === 'login' ? 'Login' : 'Sign Up'}</h2>
             <form onSubmit={handleAuth}>
-              <input type="email" placeholder="Email" required onChange={e => setAuthForm({...authForm, email: e.target.value})} />
-              <input type="password" placeholder="Password" required onChange={e => setAuthForm({...authForm, password: e.target.value})} />
+              <input type="email" placeholder="Email" required onChange={e => setAuthForm({ ...authForm, email: e.target.value })} />
+              <input type="password" placeholder="Password" required onChange={e => setAuthForm({ ...authForm, password: e.target.value })} />
               {authMode === 'login' && <p className="forgot-link" onClick={handleForgotPassword}>Forgot Password?</p>}
               <button type="submit" className="auth-btn">Continue</button>
               <div className="social-divider"><span>OR</span></div>
@@ -597,7 +615,7 @@ function App() {
                   const r = await fetch(`${API_BASE}/api/auth/google-login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ token: res.credential }) 
+                    body: JSON.stringify({ token: res.credential })
                   });
                   const d = await r.json();
                   if (d.token) {
@@ -606,11 +624,11 @@ function App() {
                     setShowAuth(false);
                     setMessages([]);
                     setActiveConvId(null);
-                    Swal.fire({ 
-                      title: 'Success!', 
-                      text: 'Logged in', 
-                      icon: 'success', 
-                      timer: 1500, 
+                    Swal.fire({
+                      title: 'Success!',
+                      text: 'Logged in',
+                      icon: 'success',
+                      timer: 1500,
                       showConfirmButton: false,
                       background: theme === 'dark' ? '#171717' : '#edededff',
                       color: theme === 'dark' ? '#fff' : '#000'
@@ -629,14 +647,21 @@ function App() {
         </div>
       )}
 
-      {showPopup && (
-        <div className="popup-overlay" onClick={() => setShowPopup(false)}>
-          <div className="popup-card" onClick={e => e.stopPropagation()}>
-            <button className="popup-close" onClick={() => setShowPopup(false)}>×</button>
-            <div className="popup-content">
-              <AlertTriangle size={48} color="#ffcc00" />
-              <p>Heads up! This project is deployed on Render's free service, so the initial load might take a few moments.</p>
-            </div>
+      {showWarningCard && (
+        <div className={`warning-card ${isWarningCardClosing ? 'closing' : ''}`}>
+          <div className="warning-card-header">
+            <AlertTriangle size={24} className="warning-card-header-icon" />
+          </div>
+          <div className="warning-card-body">
+            <p className="warning-card-text">
+              Hi! This project is deployed on Render's free service, so the initial load might take a few moments.
+            </p>
+            <button className="warning-card-close" onClick={triggerCloseWarningCard}>
+              <X size={16} />
+            </button>
+          </div>
+          <div className="warning-card-progress">
+            <div className="warning-card-progress-bar" />
           </div>
         </div>
       )}
@@ -662,9 +687,9 @@ const CodeBlock = ({ language, value }) => {
           {copied ? 'Copied!' : 'Copy code'}
         </button>
       </div>
-      <SyntaxHighlighter 
-        language={language} 
-        style={vscDarkPlus} 
+      <SyntaxHighlighter
+        language={language}
+        style={vscDarkPlus}
         customStyle={{ margin: 0, padding: '15px', background: 'transparent' }}
       >
         {value}
