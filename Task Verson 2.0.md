@@ -33,12 +33,12 @@ This task checklist tracks the implementation steps required to upgrade the appl
 ---
 
 ## 4. Goal 4: Frontend Agentic Dashboard & Visuals
-- `[ ]` Add custom option `💼 ATS Auto-Apply` in the input attach menu, visible **only** when Job-Hunt mode is active.
-- `[ ]` Build the overlay dashboard modal/panel (`.job-hunt-dashboard`):
+- `[x]` Add custom option `💼 ATS Auto-Apply` in the input attach menu, visible **only** when Job-Hunt mode is active.
+- `[x]` Build the overlay dashboard modal/panel (`.job-hunt-dashboard`):
   - Add drag-and-drop file upload target zone.
   - Implement dynamic circular ATS score gauge (color transitions: red < 50%, yellow 50-79%, green >= 80%).
   - Create scrollable pseudo-terminal container displaying real-time agent output lines.
-  - Add jobs grid/table rendering applied positions and a click-to-open sub-modal showing generated cover letters.
+  - [x] Add jobs grid/table rendering applied positions and a click-to-open sub-modal showing generated cover letters.
 
 ---
 
