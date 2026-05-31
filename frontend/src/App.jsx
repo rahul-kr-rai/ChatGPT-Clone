@@ -3,18 +3,53 @@ import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import remarkGfm from 'remark-gfm';
 import { Copy, Check } from 'lucide-react';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { IoSend } from "react-icons/io5";
 import {
   Paperclip, Search, GraduationCap, Image as ImageIcon, Mic,
   Plus, Trash2, X, Sun, Moon, Square, Menu, AlertTriangle, Briefcase,
   MessageSquare, Mail, FileText, RefreshCw, Star, Archive, MoreVertical,
-  CornerUpLeft, CornerUpRight
+  CornerUpLeft, CornerUpRight, ExternalLink, BarChart2, TrendingUp,
+  Award, Target
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { GoogleLogin } from '@react-oauth/google';
 import './App.css';
+
+const generateEmailBody = (app) => {
+  return `
+    <div class="gmail-email-card" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid var(--border-email-card); border-radius: 8px; background-color: var(--bg-email-card); color: var(--text-email-card-main);">
+      <div style="border-bottom: 2px solid #f57c00; padding-bottom: 15px; margin-bottom: 20px; text-align: center;">
+        <h2 style="color: #f57c00; margin: 0;">${app.company}</h2>
+        <span style="font-size: 12px; color: var(--text-email-card-secondary);">Official Careers Confirmation</span>
+      </div>
+      <p style="font-size: 16px; font-weight: bold; margin-top: 0; color: inherit;">Dear Candidate,</p>
+      <p style="color: inherit;">Thank you for your interest in joining <strong>${app.company}</strong>. We have successfully received your application for the position of <strong>${app.jobTitle}</strong> (${app.location || 'Remote'}).</p>
+      <p style="color: inherit;">Our hiring team is currently reviewing your qualifications and cover letter. We are impressed by your background and will reach out to you within the next 3-5 business days regarding the next steps of our interview process.</p>
+      
+      <div style="background-color: var(--bg-email-card-summary); border: 1px dashed var(--border-email-card-summary); padding: 15px; border-radius: 6px; margin: 20px 0; color: inherit;">
+        <h4 style="margin-top: 0; color: inherit; border-bottom: 1px solid var(--border-email-card); padding-bottom: 5px;">Application Summary</h4>
+        <ul style="list-style: none; padding-left: 0; margin: 0; font-size: 14px; line-height: 1.6; color: inherit;">
+          <li style="color: inherit;"><strong style="color: inherit;">Role:</strong> ${app.jobTitle}</li>
+          <li style="color: inherit;"><strong style="color: inherit;">Company:</strong> ${app.company}</li>
+          <li style="color: inherit;"><strong style="color: inherit;">Location:</strong> ${app.location || 'Remote'}</li>
+          <li style="color: inherit;"><strong style="color: inherit;">Salary:</strong> ${app.salary || 'Competitive'}</li>
+          <li style="color: inherit;"><strong style="color: inherit;">Status:</strong> Under Review</li>
+        </ul>
+      </div>
+
+      <p style="color: inherit;">A copy of your customized cover letter has been attached to your application file. You can also view it in your candidate history portal.</p>
+      
+      <p style="margin-bottom: 0; color: inherit;">Best regards,</p>
+      <p style="margin-top: 5px; font-weight: bold; color: #f57c00;">The ${app.company} Recruitment Team</p>
+      
+      <div style="border-top: 1px solid var(--border-email-card); margin-top: 25px; padding-top: 15px; text-align: center; font-size: 11px; color: var(--text-email-card-secondary);">
+        This is an automated confirmation email. Please do not reply directly to this message.
+      </div>
+    </div>
+  `;
+};
 
 function App() {
   // --- CONFIGURATION ---
@@ -61,15 +96,18 @@ function App() {
 
   // Job-Hunt Dashboard States
   const [currentView, setCurrentView] = useState('chat'); // 'chat' or 'dashboard'
-  const [dashboardSidebarTab, setDashboardSidebarTab] = useState('resume'); // 'resume', 'inbox', 'applied'
+  const [dashboardSidebarTab, setDashboardSidebarTab] = useState('resume'); // 'resume', 'inbox', 'applied', 'analytics'
+  const [analyticsDateRange, setAnalyticsDateRange] = useState('30'); // '7', '14', '30', 'all'
+  const [analyticsCompanyFilter, setAnalyticsCompanyFilter] = useState('');
   const [isAnalyzingResume, setIsAnalyzingResume] = useState(false);
   const [atsScore, setAtsScore] = useState(null);
   const [atsSuggestions, setAtsSuggestions] = useState(null);
   const [agentLogs, setAgentLogs] = useState([]);
   const [appliedJobs, setAppliedJobs] = useState([]);
+  const [appliedSearchQuery, setAppliedSearchQuery] = useState('');
+  const [appliedStatusFilter, setAppliedStatusFilter] = useState('All');
 
   // Goal 7: Candidate Inbox states
-  const [dashboardTab, setDashboardTab] = useState('logs'); // 'logs', 'applied', 'inbox'
   const [inboxEmails, setInboxEmails] = useState([]);
   const [selectedEmail, setSelectedEmail] = useState(null);
 
@@ -106,41 +144,9 @@ function App() {
   const btnRef = useRef(null);
   const terminalEndRef = useRef(null);
 
-  const generateEmailBody = (app) => {
-    return `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #ffffff; color: #333333;">
-        <div style="border-bottom: 2px solid #f57c00; padding-bottom: 15px; margin-bottom: 20px; text-align: center;">
-          <h2 style="color: #f57c00; margin: 0;">${app.company}</h2>
-          <span style="font-size: 12px; color: #777777;">Official Careers Confirmation</span>
-        </div>
-        <p style="font-size: 16px; font-weight: bold; margin-top: 0;">Dear Candidate,</p>
-        <p>Thank you for your interest in joining <strong>${app.company}</strong>. We have successfully received your application for the position of <strong>${app.jobTitle}</strong> (${app.location || 'Remote'}).</p>
-        <p>Our hiring team is currently reviewing your qualifications and cover letter. We are impressed by your background and will reach out to you within the next 3-5 business days regarding the next steps of our interview process.</p>
-        
-        <div style="background-color: #f9f9f9; border: 1px dashed #cccccc; padding: 15px; border-radius: 6px; margin: 20px 0;">
-          <h4 style="margin-top: 0; color: #333333; border-bottom: 1px solid #eeeeee; padding-bottom: 5px;">Application Summary</h4>
-          <ul style="list-style: none; padding-left: 0; margin: 0; font-size: 14px; line-height: 1.6;">
-            <li><strong>Role:</strong> ${app.jobTitle}</li>
-            <li><strong>Company:</strong> ${app.company}</li>
-            <li><strong>Location:</strong> ${app.location || 'Remote'}</li>
-            <li><strong>Salary:</strong> ${app.salary || 'Competitive'}</li>
-            <li><strong>Status:</strong> Under Review</li>
-          </ul>
-        </div>
+  // Removed generateEmailBody from inner scope and moved it above the App component
 
-        <p>A copy of your customized cover letter has been attached to your application file. You can also view it in your candidate history portal.</p>
-        
-        <p style="margin-bottom: 0;">Best regards,</p>
-        <p style="margin-top: 5px; font-weight: bold; color: #f57c00;">The ${app.company} Recruitment Team</p>
-        
-        <div style="border-top: 1px solid #eeeeee; margin-top: 25px; padding-top: 15px; text-align: center; font-size: 11px; color: #999999;">
-          This is an automated confirmation email. Please do not reply directly to this message.
-        </div>
-      </div>
-    `;
-  };
-
-  const fetchJobHuntHistory = async () => {
+  const fetchJobHuntHistory = useCallback(async () => {
     if (!user) return;
     try {
       const res = await fetch(`${API_BASE}/api/resume/history`, {
@@ -179,13 +185,13 @@ function App() {
     } catch (err) {
       console.error("Error fetching job hunt history:", err);
     }
-  };
+  }, [user, API_BASE]);
 
   useEffect(() => {
     if (currentView === 'dashboard' && user) {
       fetchJobHuntHistory();
     }
-  }, [currentView, user]);
+  }, [currentView, user, fetchJobHuntHistory]);
 
   useEffect(() => {
     if (currentView === 'dashboard') {
@@ -209,13 +215,17 @@ function App() {
     } else {
       setCurrentView('chat');
     }
-  }, [jobHuntMode]);
+  }, [jobHuntMode, fetchJobHuntHistory]);
 
   // --- Warning Card Effects & Trigger ---
   useEffect(() => {
+    if (user) {
+      setShowWarningCard(false);
+      return;
+    }
     const timer = setTimeout(() => setShowWarningCard(true), 2000);
     return () => clearTimeout(timer);
-  }, []);
+  }, [user]);
 
   const triggerCloseWarningCard = () => {
     setIsWarningCardClosing(true);
@@ -306,7 +316,7 @@ function App() {
         confirmButtonColor: '#10a37f',
         cancelButtonColor: '#444',
         confirmButtonText: 'Log In Now',
-        background: theme === 'dark' ? '#171717' : '#edededff',
+        background: theme === 'dark' ? '#232323ff' : '#edededff',
         color: theme === 'dark' ? '#fff' : '#000'
       }).then((result) => {
         if (result.isConfirmed) {
@@ -328,7 +338,7 @@ function App() {
       confirmButtonColor: '#10a37f',
       cancelButtonColor: '#444',
       confirmButtonText: 'Yes, Logout',
-      background: theme === 'dark' ? '#171717' : '#edededff',
+      background: theme === 'dark' ? '#232323ff' : '#edededff',
       color: theme === 'dark' ? '#fff' : '#000'
     });
 
@@ -357,7 +367,7 @@ function App() {
         icon: 'error',
         title: 'Not Supported',
         text: 'Your browser does not support Voice Input. Try Chrome or Edge.',
-        background: theme === 'dark' ? '#171717' : '#fff',
+        background: theme === 'dark' ? '#232323ff' : '#fff',
         color: theme === 'dark' ? '#fff' : '#000'
       });
       return;
@@ -403,7 +413,7 @@ function App() {
 
   const handleResumeUpload = async (file) => {
     if (!file) return;
-    setDashboardTab('logs');
+    setDashboardSidebarTab('resume');
     setIsAnalyzingResume(true);
     setAtsScore(null);
     setAtsSuggestions(null);
@@ -432,7 +442,9 @@ function App() {
         try {
           const errData = await res.json();
           if (errData && errData.error) errMsg = errData.error;
-        } catch (_) {}
+        } catch {
+          // Ignore JSON parsing errors for error status
+        }
         throw new Error(errMsg);
       }
       
@@ -478,7 +490,9 @@ function App() {
           try {
             const errData = await applyRes.json();
             if (errData && errData.error) errMsg = errData.error;
-          } catch (_) {}
+          } catch {
+            // Ignore JSON parsing errors for error status
+          }
           throw new Error(errMsg);
         }
         
@@ -606,7 +620,7 @@ function App() {
       confirmButtonColor: '#ff3a3a',
       cancelButtonColor: '#444',
       confirmButtonText: 'Yes, delete it',
-      background: theme === 'dark' ? '#171717' : '#edededff',
+      background: theme === 'dark' ? '#232323ff' : '#edededff',
       color: theme === 'dark' ? '#fff' : '#000'
     });
 
@@ -624,7 +638,7 @@ function App() {
           icon: 'success',
           timer: 1500,
           showConfirmButton: false,
-          background: theme === 'dark' ? '#171717' : '#edededff',
+          background: theme === 'dark' ? '#232323ff' : '#edededff',
           color: theme === 'dark' ? '#fff' : '#000'
         });
       } catch (err) { console.error(err); }
@@ -665,7 +679,7 @@ function App() {
 
   const handleForgotPassword = async () => {
     setShowAuth(false);
-    const bgColor = theme === 'dark' ? '#171717' : '#ffffff';
+    const bgColor = theme === 'dark' ? '#232323ff' : '#ffffff';
     const txtColor = theme === 'dark' ? '#f9f9f9' : '#333333';
 
     const { value: email, isDismissed } = await Swal.fire({
@@ -701,6 +715,47 @@ function App() {
       } catch (error) { console.error(error); setShowAuth(true); }
     }
   };
+
+  const getDisplayStatus = (job, index) => {
+    if (job.status && job.status !== 'applied') {
+      return job.status;
+    }
+    const statuses = ['applied', 'under review', 'interviewing', 'rejected'];
+    return statuses[index % statuses.length];
+  };
+
+  const renderStatusBadge = (status) => {
+    const s = (status || 'Applied').toLowerCase();
+    let badgeClass = 'badge-applied';
+    let label = 'Applied';
+
+    if (s === 'under review' || s === 'under_review') {
+      badgeClass = 'badge-under-review';
+      label = 'Under Review';
+    } else if (s === 'interviewing' || s === 'interview') {
+      badgeClass = 'badge-interviewing';
+      label = 'Interviewing';
+    } else if (s === 'rejected' || s === 'failed') {
+      badgeClass = 'badge-rejected';
+      label = 'Rejected';
+    }
+
+    return <span className={`status-badge ${badgeClass}`}>{label}</span>;
+  };
+
+  const filteredJobs = appliedJobs.filter((job, index) => {
+    const status = getDisplayStatus(job, index);
+
+    const matchesSearch =
+      job.jobTitle.toLowerCase().includes(appliedSearchQuery.toLowerCase()) ||
+      job.company.toLowerCase().includes(appliedSearchQuery.toLowerCase());
+
+    const matchesStatus =
+      appliedStatusFilter === 'All' ||
+      status.toLowerCase() === appliedStatusFilter.toLowerCase();
+
+    return matchesSearch && matchesStatus;
+  });
 
   return (
     <div className="chatgpt-main" data-theme={theme}>
@@ -945,6 +1000,12 @@ function App() {
               onClick={() => setDashboardSidebarTab('applied')}
             >
               <Briefcase size={16} /> Applied Jobs
+            </button>
+            <button 
+              className={`sidebar-nav-item ${dashboardSidebarTab === 'analytics' ? 'active' : ''}`}
+              onClick={() => setDashboardSidebarTab('analytics')}
+            >
+              <BarChart2 size={16} /> Analytics
             </button>
           </aside>
 
@@ -1217,14 +1278,10 @@ function App() {
                           </div>
                         </div>
 
-                        <div className="gmail-email-iframe-wrapper">
-                          <iframe 
-                            srcDoc={selectedEmail.body}
-                            title="Email Preview"
-                            className="email-body-iframe"
-                            sandbox="allow-same-origin"
-                          />
-                        </div>
+                        <div 
+                          className="gmail-email-body-content" 
+                          dangerouslySetInnerHTML={{ __html: selectedEmail.body }} 
+                        />
 
                         <div className="gmail-reply-box">
                           <button className="gmail-reply-btn"><CornerUpLeft size={14} /> Reply</button>
@@ -1249,44 +1306,324 @@ function App() {
                 {appliedJobs.length === 0 ? (
                   <div className="applied-empty-state">No applied positions yet. Upload a matching resume (Score &ge; 80) to apply.</div>
                 ) : (
-                  <div className="jobs-table-container">
-                    <table className="jobs-table">
-                      <thead>
-                        <tr>
-                          <th style={{ width: '60px' }}>#</th>
-                          <th>Job Title</th>
-                          <th>Company</th>
-                          <th>Location</th>
-                          <th>Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {appliedJobs.map((app, i) => (
-                          <tr key={i}>
-                            <td><strong>{i + 1}</strong></td>
-                            <td><strong>{app.jobTitle}</strong></td>
-                            <td>{app.company}</td>
-                            <td>{app.location || 'Remote'}</td>
-                            <td>
-                              <button 
-                                className="view-letter-btn"
-                                onClick={() => {
-                                  setSelectedCoverLetter(app.coverLetter);
-                                  setSelectedJobTitle(app.jobTitle);
-                                  setShowCoverLetterModal(true);
-                                }}
-                              >
-                                Cover Letter
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <>
+                    <div className="table-controls-bar">
+                      <div className="search-wrapper">
+                        <Search size={16} className="search-icon" />
+                        <input
+                          type="text"
+                          placeholder="Search by job title or company..."
+                          value={appliedSearchQuery}
+                          onChange={(e) => setAppliedSearchQuery(e.target.value)}
+                          className="table-search-input"
+                        />
+                      </div>
+                      <div className="filter-wrapper">
+                        <span className="filter-label">Status:</span>
+                        <select
+                          value={appliedStatusFilter}
+                          onChange={(e) => setAppliedStatusFilter(e.target.value)}
+                          className="table-filter-select"
+                        >
+                          <option value="All">All Statuses</option>
+                          <option value="Applied">Applied</option>
+                          <option value="Under Review">Under Review</option>
+                          <option value="Interviewing">Interviewing</option>
+                          <option value="Rejected">Rejected</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {filteredJobs.length === 0 ? (
+                      <div className="table-no-results">
+                        <AlertTriangle size={24} style={{ color: '#f57c00', marginBottom: '8px' }} />
+                        <p>No matching positions found.</p>
+                        <small>Try adjusting your search query or status filter.</small>
+                      </div>
+                    ) : (
+                      <div className="jobs-table-container">
+                        <table className="jobs-table">
+                          <thead>
+                            <tr>
+                              <th style={{ width: '60px' }}>#</th>
+                              <th>Job Title</th>
+                              <th>Company</th>
+                              <th>Location</th>
+                              <th>Status</th>
+                              <th style={{ width: '220px' }}>Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredJobs.map((app, i) => {
+                              const displayStatus = getDisplayStatus(app, i);
+                              const originalPostingUrl = app.jobUrl || `https://www.google.com/search?q=${encodeURIComponent(app.jobTitle + ' ' + app.company + ' jobs')}`;
+                              return (
+                                <tr key={app._id || i}>
+                                  <td className="serial-col"><strong>{i + 1}</strong></td>
+                                  <td><strong>{app.jobTitle}</strong></td>
+                                  <td>{app.company}</td>
+                                  <td>{app.location || 'Remote'}</td>
+                                  <td className="status-col">{renderStatusBadge(displayStatus)}</td>
+                                  <td>
+                                    <div className="table-actions-cell">
+                                      <button
+                                        className="view-letter-btn"
+                                        onClick={() => {
+                                          setSelectedCoverLetter(app.coverLetter);
+                                          setSelectedJobTitle(app.jobTitle);
+                                          setShowCoverLetterModal(true);
+                                        }}
+                                      >
+                                        Cover Letter
+                                      </button>
+                                      <a
+                                        href={originalPostingUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="job-external-link-btn"
+                                        title="View Original Posting"
+                                      >
+                                        <ExternalLink size={14} /> Job Post
+                                      </a>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
+
+            {/* ===== ANALYTICS TAB ===== */}
+            {dashboardSidebarTab === 'analytics' && (() => {
+              // --- Date filter ---
+              const now = new Date();
+              const daysBack = analyticsDateRange === 'all' ? Infinity : parseInt(analyticsDateRange);
+              const cutoff = analyticsDateRange === 'all' ? new Date(0) : new Date(now - daysBack * 86400000);
+
+              const filtered = appliedJobs.filter(app => {
+                const matchDate = new Date(app.appliedAt || Date.now()) >= cutoff;
+                const matchCompany = analyticsCompanyFilter === '' ||
+                  app.company.toLowerCase().includes(analyticsCompanyFilter.toLowerCase());
+                return matchDate && matchCompany;
+              });
+
+              // --- KPI calculations ---
+              const totalApplied = filtered.length;
+              const latestAts = atsScore ?? 0;
+              const statusCounts = filtered.reduce((acc, app, idx) => {
+                const s = getDisplayStatus(app, idx).toLowerCase();
+                acc[s] = (acc[s] || 0) + 1;
+                return acc;
+              }, {});
+              const interviewCount = (statusCounts['interviewing'] || 0);
+              const rejectedCount  = (statusCounts['rejected'] || 0);
+              const rejectionRate  = totalApplied > 0 ? Math.round((rejectedCount / totalApplied) * 100) : 0;
+
+              // --- Timeline: group by date (last N days) ---
+              const buckets = {};
+              const labelCount = Math.min(daysBack === Infinity ? 30 : daysBack, 30);
+              for (let i = labelCount - 1; i >= 0; i--) {
+                const d = new Date(now);
+                d.setDate(d.getDate() - i);
+                const key = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                buckets[key] = 0;
+              }
+              filtered.forEach(app => {
+                const d = new Date(app.appliedAt || Date.now());
+                if (d >= cutoff) {
+                  const key = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                  if (key in buckets) buckets[key]++;
+                }
+              });
+              const timelineKeys  = Object.keys(buckets);
+              const timelineVals  = Object.values(buckets);
+              const maxVal        = Math.max(...timelineVals, 1);
+
+              // --- Donut segments ---
+              const donutData = [
+                { label: 'Applied',      count: statusCounts['applied']      || 0, color: '#4fc3f7' },
+                { label: 'Under Review', count: statusCounts['under review']  || 0, color: '#f57c00' },
+                { label: 'Interviewing', count: statusCounts['interviewing']  || 0, color: '#66bb6a' },
+                { label: 'Rejected',     count: statusCounts['rejected']      || 0, color: '#ef5350' },
+              ].filter(d => d.count > 0);
+              const donutTotal    = donutData.reduce((s, d) => s + d.count, 0) || 1;
+              const r = 52, cx = 70, cy = 70, circumference = 2 * Math.PI * r;
+              let donutOffset = 0;
+              const donutSegments = donutData.map(seg => {
+                const pct    = seg.count / donutTotal;
+                const dash   = pct * circumference;
+                const gap    = circumference - dash;
+                const seg_el = { ...seg, dash, gap, offset: donutOffset };
+                donutOffset += dash;
+                return seg_el;
+              });
+
+              // --- Top Companies ---
+              const companyCounts = {};
+              filtered.forEach(app => { companyCounts[app.company] = (companyCounts[app.company] || 0) + 1; });
+              const topCompanies  = Object.entries(companyCounts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 8);
+              const maxCompany    = topCompanies[0]?.[1] || 1;
+
+              return (
+                <div className="analytics-container">
+                  {/* Filter Bar */}
+                  <div className="analytics-filter-bar">
+                    <div className="analytics-filter-group">
+                      <label className="analytics-filter-label">Date Range</label>
+                      <div className="analytics-date-pills">
+                        {[['7','7 Days'],['14','14 Days'],['30','30 Days'],['all','All Time']].map(([val, label]) => (
+                          <button
+                            key={val}
+                            className={`analytics-date-pill ${analyticsDateRange === val ? 'active' : ''}`}
+                            onClick={() => setAnalyticsDateRange(val)}
+                          >{label}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="analytics-filter-group">
+                      <label className="analytics-filter-label">Company</label>
+                      <div className="analytics-search-wrap">
+                        <Search size={14} className="analytics-search-icon" />
+                        <input
+                          className="analytics-search-input"
+                          placeholder="Filter by company..."
+                          value={analyticsCompanyFilter}
+                          onChange={e => setAnalyticsCompanyFilter(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* KPI Cards */}
+                  <div className="analytics-kpi-row">
+                    <div className="analytics-kpi-card">
+                      <div className="kpi-icon" style={{background:'rgba(79,195,247,0.15)'}}><Target size={20} color="#4fc3f7" /></div>
+                      <div className="kpi-body">
+                        <span className="kpi-value">{totalApplied}</span>
+                        <span className="kpi-label">Applications</span>
+                      </div>
+                    </div>
+                    <div className="analytics-kpi-card">
+                      <div className="kpi-icon" style={{background:'rgba(245,124,0,0.15)'}}><Award size={20} color="#f57c00" /></div>
+                      <div className="kpi-body">
+                        <span className="kpi-value">{latestAts > 0 ? `${latestAts}%` : '—'}</span>
+                        <span className="kpi-label">Latest ATS Score</span>
+                      </div>
+                    </div>
+                    <div className="analytics-kpi-card">
+                      <div className="kpi-icon" style={{background:'rgba(102,187,106,0.15)'}}><TrendingUp size={20} color="#66bb6a" /></div>
+                      <div className="kpi-body">
+                        <span className="kpi-value">{interviewCount}</span>
+                        <span className="kpi-label">Interviewing</span>
+                      </div>
+                    </div>
+                    <div className="analytics-kpi-card">
+                      <div className="kpi-icon" style={{background:'rgba(239,83,80,0.15)'}}><AlertTriangle size={20} color="#ef5350" /></div>
+                      <div className="kpi-body">
+                        <span className="kpi-value">{rejectionRate}%</span>
+                        <span className="kpi-label">Rejection Rate</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {totalApplied === 0 ? (
+                    <div className="analytics-empty">
+                      <BarChart2 size={48} style={{opacity:0.25, marginBottom:'12px'}} />
+                      <p>No application data for the selected period.</p>
+                      <small>Apply to jobs and return here to see your insights.</small>
+                    </div>
+                  ) : (
+                    <div className="analytics-chart-grid">
+                      {/* Timeline Bar Chart */}
+                      <div className="analytics-chart-card">
+                        <h4 className="analytics-chart-title"><BarChart2 size={16}/> Applications Over Time</h4>
+                        <div className="analytics-bar-chart">
+                          {timelineKeys.map((key, i) => (
+                            <div key={key} className="analytics-bar-col">
+                              <div className="analytics-bar-tooltip">{timelineVals[i]} app{timelineVals[i] !== 1 ? 's' : ''}<br/>{key}</div>
+                              <div
+                                className="analytics-bar-fill"
+                                style={{
+                                  height: `${Math.max((timelineVals[i] / maxVal) * 100, timelineVals[i] > 0 ? 6 : 0)}%`,
+                                  animationDelay: `${i * 30}ms`
+                                }}
+                              />
+                              {timelineKeys.length <= 14 && <span className="analytics-bar-label">{key}</span>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Status Donut Chart */}
+                      <div className="analytics-chart-card">
+                        <h4 className="analytics-chart-title"><Target size={16}/> Status Breakdown</h4>
+                        <div className="analytics-donut-wrap">
+                          <svg viewBox="0 0 140 140" className="analytics-donut-svg">
+                            {donutSegments.map((seg, i) => (
+                              <circle
+                                key={i}
+                                className="analytics-donut-segment"
+                                cx={cx} cy={cy} r={r}
+                                fill="none"
+                                stroke={seg.color}
+                                strokeWidth="18"
+                                strokeDasharray={`${seg.dash} ${seg.gap}`}
+                                strokeDashoffset={-seg.offset + circumference * 0.25}
+                                style={{animationDelay: `${i * 120}ms`}}
+                              />
+                            ))}
+                            <text x={cx} y={cy - 6} textAnchor="middle" className="donut-center-num">{totalApplied}</text>
+                            <text x={cx} y={cy + 12} textAnchor="middle" className="donut-center-label">Total</text>
+                          </svg>
+                          <div className="analytics-donut-legend">
+                            {donutData.map(seg => (
+                              <div key={seg.label} className="donut-legend-row">
+                                <span className="donut-legend-dot" style={{background: seg.color}} />
+                                <span className="donut-legend-name">{seg.label}</span>
+                                <span className="donut-legend-count">{seg.count}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Top Companies */}
+                      <div className="analytics-chart-card analytics-chart-wide">
+                        <h4 className="analytics-chart-title"><TrendingUp size={16}/> Top Target Companies</h4>
+                        {topCompanies.length === 0 ? (
+                          <p className="analytics-sub">No data</p>
+                        ) : (
+                          <div className="analytics-company-list">
+                            {topCompanies.map(([company, count], i) => (
+                              <div key={company} className="analytics-company-row">
+                                <span className="company-rank">#{i+1}</span>
+                                <span className="company-name">{company}</span>
+                                <div className="company-bar-track">
+                                  <div
+                                    className="company-bar-fill"
+                                    style={{width:`${(count/maxCompany)*100}%`, animationDelay:`${i*60}ms`}}
+                                  />
+                                </div>
+                                <span className="company-count">{count}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
           </main>
         </div>
       )}
@@ -1321,7 +1658,7 @@ function App() {
                       icon: 'success',
                       timer: 1500,
                       showConfirmButton: false,
-                      background: theme === 'dark' ? '#171717' : '#edededff',
+                      background: theme === 'dark' ? '#232323ff' : '#edededff',
                       color: theme === 'dark' ? '#fff' : '#000'
                     });
                   }
@@ -1338,7 +1675,7 @@ function App() {
         </div>
       )}
 
-      {showWarningCard && (
+      {showWarningCard && !user && (
         <div className={`warning-card ${isWarningCardClosing ? 'closing' : ''}`}>
           <div className="warning-card-header">
             <AlertTriangle size={24} className="warning-card-header-icon" />

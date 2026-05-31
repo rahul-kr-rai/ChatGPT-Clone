@@ -10,6 +10,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const multer = require('multer');
 const nodemailer = require('nodemailer');
 const { OAuth2Client } = require('google-auth-library');
+const rateLimit = require('express-rate-limit');
 
 // --- IMPORTS ---
 const connectDB = require('./db');
@@ -19,6 +20,9 @@ const Resume = require('./models/Resume');
 const JobApplication = require('./models/JobApplication');
 
 const app = express();
+
+// Enable trust proxy for express-rate-limit (Render, Vercel, Heroku, etc.)
+app.set('trust proxy', 1);
 
 // --- CONFIGURATION ---
 const PORT = process.env.PORT || 10000;
@@ -53,6 +57,25 @@ app.use(cors({
   credentials: true
 }));
 
+// --- RATE LIMITING MIDDLEWARES ---
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 30, // Limit each IP to 30 auth/login/signup requests per 15 minutes
+  message: { error: "Too many authentication attempts, please try again after 15 minutes" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 200, // Limit each IP to 200 general requests per 15 minutes
+  message: { error: "Too many requests from this IP, please try again after 15 minutes" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Rate limiters are applied directly on each route to ensure CodeQL matches them correctly
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }
@@ -82,7 +105,7 @@ const optionalAuth = (req, res, next) => {
 };
 
 // --- AUTH ROUTES ---
-app.post('/api/auth/signup', async (req, res) => {
+app.post('/api/auth/signup', authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -92,7 +115,7 @@ app.post('/api/auth/signup', async (req, res) => {
   } catch (err) { res.status(400).json({ error: "Email exists" }); }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
     const user = await User.findOne({ email });
@@ -122,7 +145,17 @@ function fileToGenerativePart(buffer, mimeType) {
   };
 }
 
-app.post('/api/chat', optionalAuth, upload.single('file'), async (req, res) => {
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+app.post('/api/chat', apiLimiter, optionalAuth, upload.single('file'), async (req, res) => {
   try {
     const { message, conversationId } = req.body;
     const file = req.file;
@@ -141,6 +174,7 @@ app.post('/api/chat', optionalAuth, upload.single('file'), async (req, res) => {
           YOUR IDENTITY:
           - Creator: Rahul Kumar Rai (a Full Stack Developer).
           - Purpose: To assist users with coding, creativity, and general knowledge.
+          - Abilities: Job-Hunt mode (Auto-resume scanning, ATS score checking, Auto-job apply, Auto-cover letter writing, Generate resume and cover letter, Analyze job description and company), Write code, create content, answer questions, provide information, and assist with various tasks.
           - Personality: Professional, enthusiastic, and clear.
 
           YOUR GUIDELINES:
@@ -197,13 +231,13 @@ app.post('/api/chat', optionalAuth, upload.single('file'), async (req, res) => {
   }
 });
 
-app.get('/api/conversations', optionalAuth, async (req, res) => {
+app.get('/api/conversations', apiLimiter, optionalAuth, async (req, res) => {
   if (!req.user) return res.json([]);
   const convs = await Conversation.find({ userId: req.user.id }).sort({ updatedAt: -1 }).select('title _id');
   res.json(convs);
 });
 
-app.get('/api/conversations/:id', optionalAuth, async (req, res) => {
+app.get('/api/conversations/:id', apiLimiter, optionalAuth, async (req, res) => {
   if (!req.user) return res.status(401).json({ error: "Unauthorized" });
   if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ error: "Invalid ID" });
 
@@ -211,7 +245,7 @@ app.get('/api/conversations/:id', optionalAuth, async (req, res) => {
   res.json(conv);
 });
 
-app.delete('/api/conversations/:id', optionalAuth, async (req, res) => {
+app.delete('/api/conversations/:id', apiLimiter, optionalAuth, async (req, res) => {
   if (!req.user) return res.status(401).json({ error: "Unauthorized" });
   await Conversation.findOneAndDelete({ _id: req.params.id, userId: req.user.id });
   res.json({ message: "Deleted" });
@@ -219,7 +253,7 @@ app.delete('/api/conversations/:id', optionalAuth, async (req, res) => {
 
 // --- RESUME & AUTO-APPLY ENDPOINTS ---
 
-app.post('/api/resume/evaluate', optionalAuth, upload.single('file'), async (req, res) => {
+app.post('/api/resume/evaluate', apiLimiter, optionalAuth, upload.single('file'), async (req, res) => {
   try {
     const file = req.file;
     if (!file) {
@@ -230,7 +264,14 @@ app.post('/api/resume/evaluate', optionalAuth, upload.single('file'), async (req
       return res.status(500).json({ error: "AI service unavailable" });
     }
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-flash",
+      systemInstruction: {
+        parts: [{
+          text: "You are an expert ATS (Applicant Tracking System) auditor. Analyze the uploaded resume and return a structured JSON response matching the requested schema."
+        }]
+      }
+    });
     const filePart = fileToGenerativePart(file.buffer, file.mimetype);
 
     const prompt = `
@@ -298,7 +339,7 @@ app.post('/api/resume/evaluate', optionalAuth, upload.single('file'), async (req
   }
 });
 
-app.post('/api/resume/auto-apply', optionalAuth, async (req, res) => {
+app.post('/api/resume/auto-apply', apiLimiter, optionalAuth, async (req, res) => {
   try {
     const { resumeId } = req.body;
     if (!resumeId) {
@@ -314,7 +355,14 @@ app.post('/api/resume/auto-apply', optionalAuth, async (req, res) => {
       return res.status(500).json({ error: "AI service unavailable" });
     }
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-flash",
+      systemInstruction: {
+        parts: [{
+          text: "You are an expert job search matching agent and cover letter writer."
+        }]
+      }
+    });
 
     let jobListings = [];
     let apiUsed = null;
@@ -343,8 +391,8 @@ app.post('/api/resume/auto-apply', optionalAuth, async (req, res) => {
               jobTitle: j.job_title || "Software Engineer",
               company: j.employer_name || "Tech Solutions Ltd.",
               location: `${j.job_city || ''} ${j.job_state || ''} ${j.job_country || ''}`.trim() || "Remote",
-              salary: j.job_min_salary && j.job_max_salary 
-                ? `$${j.job_min_salary.toLocaleString()} - $${j.job_max_salary.toLocaleString()}` 
+              salary: j.job_min_salary && j.job_max_salary
+                ? `$${j.job_min_salary.toLocaleString()} - $${j.job_max_salary.toLocaleString()}`
                 : "Competitive",
               description: j.job_description ? j.job_description.substring(0, 200) + "..." : "No description provided.",
               jobUrl: j.job_apply_link || "https://careers.google.com"
@@ -372,8 +420,8 @@ app.post('/api/resume/auto-apply', optionalAuth, async (req, res) => {
               jobTitle: j.title || "Software Engineer",
               company: j.company?.display_name || "Tech Solutions Ltd.",
               location: j.location?.display_name || "Remote",
-              salary: j.salary_min && j.salary_max 
-                ? `$${j.salary_min.toLocaleString()} - $${j.salary_max.toLocaleString()}` 
+              salary: j.salary_min && j.salary_max
+                ? `$${j.salary_min.toLocaleString()} - $${j.salary_max.toLocaleString()}`
                 : "Competitive",
               description: j.description ? j.description.replace(/<\/?[^>]+(>|$)/g, "").substring(0, 200) + "..." : "No description provided.",
               jobUrl: j.redirect_url || "https://careers.google.com"
@@ -446,11 +494,10 @@ app.post('/api/resume/auto-apply', optionalAuth, async (req, res) => {
     for (const job of jobListings) {
       // Duplicate check: check if the user has already applied to this company (case-insensitive)
       if (req.user) {
-        const escapedCompany = job.company.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
         const existingApp = await JobApplication.findOne({
           userId: req.user.id,
-          company: { $regex: new RegExp("^" + escapedCompany + "$", "i") }
-        });
+          company: job.company
+        }).collation({ locale: 'en', strength: 2 });
         if (existingApp) {
           console.log(`⚠️ [Job Agent] Already applied to ${job.company}. Skipping duplicate submission.`);
           appliedJobs.push({
@@ -498,24 +545,24 @@ app.post('/api/resume/auto-apply', optionalAuth, async (req, res) => {
         if (app.status === 'skipped') continue;
         try {
           const domain = app.company.toLowerCase().replace(/[^a-z0-9]/g, '') || 'company';
-          
+
           const emailHtml = `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #ffffff; color: #333333; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
               <div style="border-bottom: 2px solid #f57c00; padding-bottom: 15px; margin-bottom: 20px; text-align: center;">
-                <h2 style="color: #f57c00; margin: 0; font-size: 24px; letter-spacing: 0.5px;">${app.company}</h2>
+                <h2 style="color: #f57c00; margin: 0; font-size: 24px; letter-spacing: 0.5px;">${escapeHtml(app.company)}</h2>
                 <span style="font-size: 11px; color: #888888; text-transform: uppercase; font-weight: bold; letter-spacing: 1px;">Official Careers Confirmation</span>
               </div>
               <p style="font-size: 16px; font-weight: bold; margin-top: 0; color: #111111;">Dear Candidate,</p>
-              <p style="line-height: 1.6; font-size: 14px; color: #444444;">Thank you for your interest in joining <strong>${app.company}</strong>. We have successfully received your application for the position of <strong>${app.jobTitle}</strong> (${app.location || 'Remote'}).</p>
+              <p style="line-height: 1.6; font-size: 14px; color: #444444;">Thank you for your interest in joining <strong>${escapeHtml(app.company)}</strong>. We have successfully received your application for the position of <strong>${escapeHtml(app.jobTitle)}</strong> (${escapeHtml(app.location) || 'Remote'}).</p>
               <p style="line-height: 1.6; font-size: 14px; color: #444444;">Our hiring team is currently reviewing your qualifications and cover letter. We are impressed by your background and will reach out to you within the next 3-5 business days regarding the next steps of our interview process.</p>
               
               <div style="background-color: #f9f9f9; border: 1px dashed #cccccc; padding: 15px; border-radius: 6px; margin: 20px 0;">
                 <h4 style="margin-top: 0; color: #333333; border-bottom: 1px solid #eeeeee; padding-bottom: 5px; font-size: 15px;">Application Summary</h4>
                 <ul style="list-style: none; padding-left: 0; margin: 0; font-size: 13px; line-height: 1.8; color: #555555;">
-                  <li><strong>Role:</strong> ${app.jobTitle}</li>
-                  <li><strong>Company:</strong> ${app.company}</li>
-                  <li><strong>Location:</strong> ${app.location || 'Remote'}</li>
-                  <li><strong>Salary:</strong> ${app.salary || 'Competitive'}</li>
+                  <li><strong>Role:</strong> ${escapeHtml(app.jobTitle)}</li>
+                  <li><strong>Company:</strong> ${escapeHtml(app.company)}</li>
+                  <li><strong>Location:</strong> ${escapeHtml(app.location) || 'Remote'}</li>
+                  <li><strong>Salary:</strong> ${escapeHtml(app.salary) || 'Competitive'}</li>
                   <li><strong>Status:</strong> Under Review</li>
                 </ul>
               </div>
@@ -523,7 +570,7 @@ app.post('/api/resume/auto-apply', optionalAuth, async (req, res) => {
               <p style="line-height: 1.6; font-size: 14px; color: #444444;">A copy of your customized cover letter has been attached to your application file. You can also view it in your candidate history portal.</p>
               
               <p style="margin-bottom: 0; font-size: 14px; color: #444444;">Best regards,</p>
-              <p style="margin-top: 5px; font-weight: bold; color: #f57c00; font-size: 14px;">The ${app.company} Recruitment Team</p>
+              <p style="margin-top: 5px; font-weight: bold; color: #f57c00; font-size: 14px;">The ${escapeHtml(app.company)} Recruitment Team</p>
               
               <div style="border-top: 1px solid #eeeeee; margin-top: 25px; padding-top: 15px; text-align: center; font-size: 11px; color: #999999;">
                 This is an automated confirmation email. Please do not reply directly to this message.
@@ -563,7 +610,7 @@ app.post('/api/resume/auto-apply', optionalAuth, async (req, res) => {
   }
 });
 
-app.get('/api/resume/history', optionalAuth, async (req, res) => {
+app.get('/api/resume/history', apiLimiter, optionalAuth, async (req, res) => {
   try {
     if (!req.user) {
       return res.json({ resumes: [], applications: [] });
@@ -596,7 +643,7 @@ const transporter = nodemailer.createTransport({
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const client = new OAuth2Client(GOOGLE_CLIENT_ID);
 
-app.post('/api/auth/google-login', async (req, res) => {
+app.post('/api/auth/google-login', authLimiter, async (req, res) => {
   try {
     const { token } = req.body;
     const ticket = await client.verifyIdToken({
@@ -621,7 +668,7 @@ app.post('/api/auth/google-login', async (req, res) => {
   }
 });
 
-app.post('/api/auth/forgot-password', async (req, res) => {
+app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
   const { email } = req.body;
   const user = await User.findOne({ email });
   if (!user) return res.status(404).json({ error: "User not found" });
@@ -642,7 +689,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
   res.json({ message: "Reset link sent!" });
 });
 
-app.post('/api/auth/reset-password', async (req, res) => {
+app.post('/api/auth/reset-password', authLimiter, async (req, res) => {
   const { token, newPassword } = req.body;
 
   // Verify token first to get user ID
