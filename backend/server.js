@@ -345,6 +345,9 @@ app.post('/api/resume/auto-apply', apiLimiter, optionalAuth, async (req, res) =>
     if (!resumeId) {
       return res.status(400).json({ error: "resumeId is required" });
     }
+    if (!mongoose.Types.ObjectId.isValid(resumeId)) {
+      return res.status(400).json({ error: "Invalid resumeId format" });
+    }
 
     const resume = await Resume.findById(resumeId);
     if (!resume) {
