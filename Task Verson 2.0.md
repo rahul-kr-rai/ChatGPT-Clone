@@ -43,16 +43,24 @@ This task checklist tracks the implementation steps required to upgrade the appl
 ---
 
 ## 5. Goal 5: Ensure Separation & Retention of Classic Features
-- `[ ]` Verify that when Job-Hunt mode is **inactive**:
+- `[x]` Verify that when Job-Hunt mode is **inactive**:
   - All standard messaging functions (text prompts, image prompts, PDF reading queries) work perfectly.
   - Normal files uploaded via attach menu are handled as general chat context by Gemini.
   - The job dashboard and logs are completely hidden, preserving the original ChatGPT interface.
-- `[ ]` Verify that when Job-Hunt mode is **active**:
+- `[x]` Verify that when Job-Hunt mode is **active**:
   - General chat operations still function.
   - File uploads specifically matching resume pathways trigger the ATS dashboard and auto-apply pipeline.
 
 ---
 
 ## 6. Goal 6: Verification & Validation
-- `[ ]` Build production code (`npm run build`) in both backend and frontend to check compile-time health.
-- `[ ]` Perform manual integration testing (mocking high/low ATS scenarios to check branching workflows).
+- `[x]` Build production code (`npm run build`) in both backend and frontend to check compile-time health.
+- `[x]` Perform manual integration testing (mocking high/low ATS scenarios to check branching workflows).
+
+---
+
+## 7. Goal 7: Candidate Inbox Simulation UI
+- `[/]` Create Tab navigation inside the Job-Hunt Dashboard to toggle between "Applied Jobs" and "Inbox".
+- `[ ]` Implement Mail client split-screen UI (left list of messages, right detailed reader pane) inside the Inbox tab.
+- `[ ]` Generate mock emails from `@company.com` domains dynamically for each applied position.
+- `[ ]` Implement unread indicators and click tracking for the simulated emails.

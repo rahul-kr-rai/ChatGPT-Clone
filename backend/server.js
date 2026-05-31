@@ -7,7 +7,7 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const multer = require('multer'); 
+const multer = require('multer');
 const nodemailer = require('nodemailer');
 const { OAuth2Client } = require('google-auth-library');
 
@@ -53,9 +53,9 @@ app.use(cors({
   credentials: true
 }));
 
-const upload = multer({ 
+const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 } 
+  limits: { fileSize: 5 * 1024 * 1024 }
 });
 
 // --- DATABASE CONNECTION ---
@@ -128,14 +128,14 @@ app.post('/api/chat', optionalAuth, upload.single('file'), async (req, res) => {
     const file = req.file;
 
     if (!genAI) {
-        return res.status(500).json({ error: "Server Error: AI Service Unavailable" });
+      return res.status(500).json({ error: "Server Error: AI Service Unavailable" });
     }
 
     // UPDATED: Advanced System Instruction with Persona
-    const model = genAI.getGenerativeModel({ 
+    const model = genAI.getGenerativeModel({
       model: "gemini-2.5-flash",
       systemInstruction: {
-        parts: [{ 
+        parts: [{
           text: `You are 'AI ChatBot', a sophisticated and helpful virtual assistant designed and developed by Rahul Kumar Rai.
 
           YOUR IDENTITY:
@@ -156,7 +156,7 @@ app.post('/api/chat', optionalAuth, upload.single('file'), async (req, res) => {
     let promptParts = [];
     if (message) promptParts.push(message);
     if (file) {
-        promptParts.push(fileToGenerativePart(file.buffer, file.mimetype));
+      promptParts.push(fileToGenerativePart(file.buffer, file.mimetype));
     }
 
     if (promptParts.length === 0) {
@@ -168,17 +168,17 @@ app.post('/api/chat', optionalAuth, upload.single('file'), async (req, res) => {
 
     if (req.user) {
       let conv = null;
-      
+
       if (conversationId && mongoose.Types.ObjectId.isValid(conversationId)) {
         conv = await Conversation.findOne({ _id: conversationId, userId: req.user.id });
       }
 
       if (!conv) {
         const titleText = message ? message.substring(0, 30) : (file ? "Image Upload" : "New Chat");
-        conv = new Conversation({ 
-            userId: req.user.id, 
-            title: titleText + "...", 
-            messages: [] 
+        conv = new Conversation({
+          userId: req.user.id,
+          title: titleText + "...",
+          messages: []
         });
       }
 
@@ -193,7 +193,7 @@ app.post('/api/chat', optionalAuth, upload.single('file'), async (req, res) => {
     res.json({ text: botResponse });
   } catch (error) {
     console.error("🔴 Server Error:", error);
-    res.status(500).json({ error: error.message || "AI Generation Failed" }); 
+    res.status(500).json({ error: error.message || "AI Generation Failed" });
   }
 });
 
@@ -206,7 +206,7 @@ app.get('/api/conversations', optionalAuth, async (req, res) => {
 app.get('/api/conversations/:id', optionalAuth, async (req, res) => {
   if (!req.user) return res.status(401).json({ error: "Unauthorized" });
   if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ error: "Invalid ID" });
-  
+
   const conv = await Conversation.findOne({ _id: req.params.id, userId: req.user.id });
   res.json(conv);
 });
@@ -240,6 +240,7 @@ app.post('/api/resume/evaluate', optionalAuth, upload.single('file'), async (req
       The JSON structure MUST follow this exact schema:
       {
         "atsScore": number (0 to 100),
+        "email": string (the candidate's email address extracted from the resume. If not found, return empty string or null),
         "jobSearchQuery": string (a short optimized 3-5 word job search query matching the candidate's core profile, e.g. "Full Stack Developer React Node"),
         "skills": [string] (list of key skills found in the resume),
         "missingKeywords": [string] (list of relevant industry keywords/skills that are missing or underrepresented),
@@ -253,8 +254,15 @@ app.post('/api/resume/evaluate', optionalAuth, upload.single('file'), async (req
 
     let evaluation;
     try {
-      const cleanedJSON = responseText.replace(/```json/i, '').replace(/```/g, '').trim();
-      evaluation = JSON.parse(cleanedJSON);
+      const startIndex = responseText.indexOf('{');
+      const endIndex = responseText.lastIndexOf('}');
+      if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+        const jsonString = responseText.substring(startIndex, endIndex + 1);
+        evaluation = JSON.parse(jsonString);
+      } else {
+        const cleanedJSON = responseText.replace(/```json/i, '').replace(/```/g, '').trim();
+        evaluation = JSON.parse(cleanedJSON);
+      }
     } catch (e) {
       console.error("Failed to parse JSON from Gemini:", responseText);
       return res.status(500).json({ error: "AI returned invalid response format. Please try again." });
@@ -263,6 +271,7 @@ app.post('/api/resume/evaluate', optionalAuth, upload.single('file'), async (req
     const resumeData = new Resume({
       userId: req.user ? req.user.id : undefined,
       fileName: file.originalname,
+      email: evaluation.email || "",
       atsScore: evaluation.atsScore || 70,
       jobSearchQuery: evaluation.jobSearchQuery || "Software Engineer",
       skills: evaluation.skills || [],
@@ -279,7 +288,13 @@ app.post('/api/resume/evaluate', optionalAuth, upload.single('file'), async (req
     });
   } catch (error) {
     console.error("🔴 Resume Evaluation Error:", error);
-    res.status(500).json({ error: error.message || "Resume evaluation failed" });
+    let errorMsg = error.message || "Resume evaluation failed";
+    if (errorMsg.includes("429") || errorMsg.toLowerCase().includes("quota")) {
+      errorMsg = "Google Generative AI free-tier quota/rate limit exceeded. Please wait a moment (approx. 30-60 seconds) and try again.";
+    } else if (errorMsg.includes("503")) {
+      errorMsg = "Gemini API service is currently busy or unavailable. Please try again in a moment.";
+    }
+    res.status(500).json({ error: errorMsg });
   }
 });
 
@@ -301,52 +316,155 @@ app.post('/api/resume/auto-apply', optionalAuth, async (req, res) => {
 
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-    const searchPrompt = `
-      You are a job search matching agent. Based on the candidate's core profile and target search query: "${resume.jobSearchQuery}", generate exactly 3 relevant open job listings.
-      Your response must be a valid JSON array of objects ONLY, with no extra formatting, markdown wraps (like \`\`\`json), or explanations outside of the JSON.
-
-      The JSON structure MUST follow this exact schema:
-      [
-        {
-          "jobTitle": string,
-          "company": string,
-          "location": string,
-          "salary": string (e.g. "$90,000 - $110,000"),
-          "description": string (brief 2-3 sentence description of the role requirements)
-        }
-      ]
-    `;
-
-    const searchResult = await model.generateContent(searchPrompt);
-    const searchResponseText = searchResult.response.text().trim();
-
     let jobListings = [];
-    try {
-      const cleanedSearchJSON = searchResponseText.replace(/```json/i, '').replace(/```/g, '').trim();
-      jobListings = JSON.parse(cleanedSearchJSON);
-    } catch (e) {
-      console.error("Failed to parse JSON job listings from Gemini:", searchResponseText);
-      jobListings = [
-        {
-          jobTitle: `${resume.jobSearchQuery || 'Software Engineer'}`,
-          company: "Tech Innovators Inc.",
-          location: "Remote (US/Canada)",
-          salary: "$100,000 - $120,000",
-          description: "Looking for an energetic engineer to build out core React applications and integrate robust Node.js backend services."
-        },
-        {
-          jobTitle: `Junior ${resume.jobSearchQuery || 'Developer'}`,
-          company: "Global Core Systems",
-          location: "Hybrid (New York, NY)",
-          salary: "$85,000 - $95,000",
-          description: "Seeking a developer to assist in designing high performance web interfaces, APIs, and optimizing database schema performances."
+    let apiUsed = null;
+
+    const adzunaAppId = process.env.ADZUNA_APP_ID;
+    const adzunaAppKey = process.env.ADZUNA_APP_KEY;
+    const adzunaCountry = process.env.ADZUNA_COUNTRY || 'us';
+    const rapidApiKey = process.env.RAPIDAPI_KEY;
+
+    // 1. Try JSearch API (RapidAPI)
+    if (rapidApiKey && rapidApiKey.trim() !== "") {
+      try {
+        console.log(`🔍 [Job Agent] Querying JSearch (RapidAPI) for query: "${resume.jobSearchQuery}"...`);
+        const url = `https://jsearch.p.rapidapi.com/search?query=${encodeURIComponent(resume.jobSearchQuery)}&num_pages=1`;
+        const apiRes = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'x-rapidapi-key': rapidApiKey,
+            'x-rapidapi-host': 'jsearch.p.rapidapi.com'
+          }
+        });
+        if (apiRes.ok) {
+          const apiData = await apiRes.json();
+          if (apiData.data && apiData.data.length > 0) {
+            jobListings = apiData.data.slice(0, 3).map(j => ({
+              jobTitle: j.job_title || "Software Engineer",
+              company: j.employer_name || "Tech Solutions Ltd.",
+              location: `${j.job_city || ''} ${j.job_state || ''} ${j.job_country || ''}`.trim() || "Remote",
+              salary: j.job_min_salary && j.job_max_salary 
+                ? `$${j.job_min_salary.toLocaleString()} - $${j.job_max_salary.toLocaleString()}` 
+                : "Competitive",
+              description: j.job_description ? j.job_description.substring(0, 200) + "..." : "No description provided.",
+              jobUrl: j.job_apply_link || "https://careers.google.com"
+            }));
+            apiUsed = "JSearch (RapidAPI)";
+          }
+        } else {
+          console.warn("JSearch API call failed with status:", apiRes.status);
         }
-      ];
+      } catch (err) {
+        console.error("Error fetching from JSearch API:", err);
+      }
+    }
+
+    // 2. Try Adzuna API
+    if (jobListings.length === 0 && adzunaAppId && adzunaAppId.trim() !== "" && adzunaAppKey && adzunaAppKey.trim() !== "") {
+      try {
+        console.log(`🔍 [Job Agent] Querying Adzuna API for query: "${resume.jobSearchQuery}"...`);
+        const url = `https://api.adzuna.com/v1/api/jobs/${adzunaCountry}/search/1?app_id=${adzunaAppId}&app_key=${adzunaAppKey}&results_per_page=3&what=${encodeURIComponent(resume.jobSearchQuery)}`;
+        const apiRes = await fetch(url);
+        if (apiRes.ok) {
+          const apiData = await apiRes.json();
+          if (apiData.results && apiData.results.length > 0) {
+            jobListings = apiData.results.map(j => ({
+              jobTitle: j.title || "Software Engineer",
+              company: j.company?.display_name || "Tech Solutions Ltd.",
+              location: j.location?.display_name || "Remote",
+              salary: j.salary_min && j.salary_max 
+                ? `$${j.salary_min.toLocaleString()} - $${j.salary_max.toLocaleString()}` 
+                : "Competitive",
+              description: j.description ? j.description.replace(/<\/?[^>]+(>|$)/g, "").substring(0, 200) + "..." : "No description provided.",
+              jobUrl: j.redirect_url || "https://careers.google.com"
+            }));
+            apiUsed = "Adzuna API";
+          }
+        } else {
+          console.warn("Adzuna API call failed with status:", apiRes.status);
+        }
+      } catch (err) {
+        console.error("Error fetching from Adzuna API:", err);
+      }
+    }
+
+    // 3. Fallback to Gemini Simulation
+    if (jobListings.length === 0) {
+      console.log(`🤖 [Job Agent] No live API responses. Falling back to Gemini simulation for query: "${resume.jobSearchQuery}"...`);
+      const searchPrompt = `
+        You are a job search matching agent. Based on the candidate's core profile and target search query: "${resume.jobSearchQuery}", generate exactly 3 relevant open job listings.
+        Your response must be a valid JSON array of objects ONLY, with no extra formatting, markdown wraps (like \`\`\`json), or explanations outside of the JSON.
+
+        The JSON structure MUST follow this exact schema:
+        [
+          {
+            "jobTitle": string,
+            "company": string,
+            "location": string,
+            "salary": string (e.g. "$90,000 - $110,000"),
+            "description": string (brief 2-3 sentence description of the role requirements)
+          }
+        ]
+      `;
+
+      const searchResult = await model.generateContent(searchPrompt);
+      const searchResponseText = searchResult.response.text().trim();
+
+      try {
+        const startIndex = searchResponseText.indexOf('[');
+        const endIndex = searchResponseText.lastIndexOf(']');
+        if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+          const jsonString = searchResponseText.substring(startIndex, endIndex + 1);
+          jobListings = JSON.parse(jsonString);
+        } else {
+          const cleanedSearchJSON = searchResponseText.replace(/```json/i, '').replace(/```/g, '').trim();
+          jobListings = JSON.parse(cleanedSearchJSON);
+        }
+      } catch (e) {
+        console.error("Failed to parse JSON job listings from Gemini:", searchResponseText);
+        jobListings = [
+          {
+            jobTitle: `${resume.jobSearchQuery || 'Software Engineer'}`,
+            company: "Tech Innovators Inc.",
+            location: "Remote (US/Canada)",
+            salary: "$100,000 - $120,000",
+            description: "Looking for an energetic engineer to build out core React applications and integrate robust Node.js backend services."
+          },
+          {
+            jobTitle: `Junior ${resume.jobSearchQuery || 'Developer'}`,
+            company: "Global Core Systems",
+            location: "Hybrid (New York, NY)",
+            salary: "$85,000 - $95,000",
+            description: "Seeking a developer to assist in designing high performance web interfaces, APIs, and optimizing database schema performances."
+          }
+        ];
+      }
     }
 
     const appliedJobs = [];
 
     for (const job of jobListings) {
+      // Duplicate check: check if the user has already applied to this company (case-insensitive)
+      if (req.user) {
+        const escapedCompany = job.company.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+        const existingApp = await JobApplication.findOne({
+          userId: req.user.id,
+          company: { $regex: new RegExp("^" + escapedCompany + "$", "i") }
+        });
+        if (existingApp) {
+          console.log(`⚠️ [Job Agent] Already applied to ${job.company}. Skipping duplicate submission.`);
+          appliedJobs.push({
+            jobTitle: job.jobTitle,
+            company: job.company,
+            location: job.location,
+            salary: job.salary,
+            coverLetter: existingApp.coverLetter,
+            status: 'skipped'
+          });
+          continue;
+        }
+      }
+
       const coverLetterPrompt = `
         You are a career assistant. Write a professional, customized, compelling cover letter (max 250 words) for a candidate applying to the position of "${job.jobTitle}" at "${job.company}".
         The candidate has the following skills: ${resume.skills.join(', ')}.
@@ -364,7 +482,7 @@ app.post('/api/resume/auto-apply', optionalAuth, async (req, res) => {
         company: job.company,
         location: job.location,
         salary: job.salary,
-        jobUrl: `https://${job.company.toLowerCase().replace(/[^a-z0-9]/g, '')}.com/careers/apply`,
+        jobUrl: job.jobUrl || `https://${job.company.toLowerCase().replace(/[^a-z0-9]/g, '')}.com/careers/apply`,
         coverLetter: coverLetterText,
         status: 'applied'
       });
@@ -373,14 +491,75 @@ app.post('/api/resume/auto-apply', optionalAuth, async (req, res) => {
       appliedJobs.push(newApplication);
     }
 
+    // Send actual confirmation emails to candidate if recipient email and mail credentials exist
+    const recipientEmail = resume.email || (req.user ? req.user.email : null);
+    if (recipientEmail && process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+      for (const app of appliedJobs) {
+        if (app.status === 'skipped') continue;
+        try {
+          const domain = app.company.toLowerCase().replace(/[^a-z0-9]/g, '') || 'company';
+          
+          const emailHtml = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #ffffff; color: #333333; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
+              <div style="border-bottom: 2px solid #f57c00; padding-bottom: 15px; margin-bottom: 20px; text-align: center;">
+                <h2 style="color: #f57c00; margin: 0; font-size: 24px; letter-spacing: 0.5px;">${app.company}</h2>
+                <span style="font-size: 11px; color: #888888; text-transform: uppercase; font-weight: bold; letter-spacing: 1px;">Official Careers Confirmation</span>
+              </div>
+              <p style="font-size: 16px; font-weight: bold; margin-top: 0; color: #111111;">Dear Candidate,</p>
+              <p style="line-height: 1.6; font-size: 14px; color: #444444;">Thank you for your interest in joining <strong>${app.company}</strong>. We have successfully received your application for the position of <strong>${app.jobTitle}</strong> (${app.location || 'Remote'}).</p>
+              <p style="line-height: 1.6; font-size: 14px; color: #444444;">Our hiring team is currently reviewing your qualifications and cover letter. We are impressed by your background and will reach out to you within the next 3-5 business days regarding the next steps of our interview process.</p>
+              
+              <div style="background-color: #f9f9f9; border: 1px dashed #cccccc; padding: 15px; border-radius: 6px; margin: 20px 0;">
+                <h4 style="margin-top: 0; color: #333333; border-bottom: 1px solid #eeeeee; padding-bottom: 5px; font-size: 15px;">Application Summary</h4>
+                <ul style="list-style: none; padding-left: 0; margin: 0; font-size: 13px; line-height: 1.8; color: #555555;">
+                  <li><strong>Role:</strong> ${app.jobTitle}</li>
+                  <li><strong>Company:</strong> ${app.company}</li>
+                  <li><strong>Location:</strong> ${app.location || 'Remote'}</li>
+                  <li><strong>Salary:</strong> ${app.salary || 'Competitive'}</li>
+                  <li><strong>Status:</strong> Under Review</li>
+                </ul>
+              </div>
+
+              <p style="line-height: 1.6; font-size: 14px; color: #444444;">A copy of your customized cover letter has been attached to your application file. You can also view it in your candidate history portal.</p>
+              
+              <p style="margin-bottom: 0; font-size: 14px; color: #444444;">Best regards,</p>
+              <p style="margin-top: 5px; font-weight: bold; color: #f57c00; font-size: 14px;">The ${app.company} Recruitment Team</p>
+              
+              <div style="border-top: 1px solid #eeeeee; margin-top: 25px; padding-top: 15px; text-align: center; font-size: 11px; color: #999999;">
+                This is an automated confirmation email. Please do not reply directly to this message.
+              </div>
+            </div>
+          `;
+
+          await transporter.sendMail({
+            from: `"${app.company} Careers" <careers@${domain}.com>`,
+            replyTo: `careers@${domain}.com`,
+            to: recipientEmail,
+            subject: `Application Confirmation - ${app.jobTitle} at ${app.company}`,
+            html: emailHtml
+          });
+          console.log(`✉️ Real confirmation email sent to ${recipientEmail} from careers@${domain}.com for job: ${app.jobTitle}`);
+        } catch (mailError) {
+          console.error(`❌ Failed to send confirmation email for ${app.jobTitle}:`, mailError);
+        }
+      }
+    }
+
     res.json({
       success: true,
-      applications: appliedJobs
+      applications: appliedJobs,
+      apiUsed: apiUsed
     });
 
   } catch (error) {
     console.error("🔴 Auto Apply Error:", error);
-    res.status(500).json({ error: error.message || "Auto application process failed" });
+    let errorMsg = error.message || "Auto application process failed";
+    if (errorMsg.includes("429") || errorMsg.toLowerCase().includes("quota")) {
+      errorMsg = "Google Generative AI free-tier quota/rate limit exceeded. Please wait a moment (approx. 30-60 seconds) and try again.";
+    } else if (errorMsg.includes("503")) {
+      errorMsg = "Gemini API service is currently busy or unavailable. Please try again in a moment.";
+    }
+    res.status(500).json({ error: errorMsg });
   }
 });
 
@@ -407,7 +586,7 @@ app.get('/api/resume/history', optionalAuth, async (req, res) => {
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: process.env.EMAIL_USER, 
+    user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
   }
 });
@@ -465,7 +644,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 
 app.post('/api/auth/reset-password', async (req, res) => {
   const { token, newPassword } = req.body;
-  
+
   // Verify token first to get user ID
   let decoded;
   try {

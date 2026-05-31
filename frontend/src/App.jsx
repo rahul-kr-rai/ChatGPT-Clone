@@ -8,7 +8,9 @@ import ReactMarkdown from 'react-markdown';
 import { IoSend } from "react-icons/io5";
 import {
   Paperclip, Search, GraduationCap, Image as ImageIcon, Mic,
-  Plus, Trash2, X, Sun, Moon, Square, Menu, AlertTriangle, Briefcase
+  Plus, Trash2, X, Sun, Moon, Square, Menu, AlertTriangle, Briefcase,
+  MessageSquare, Mail, FileText, RefreshCw, Star, Archive, MoreVertical,
+  CornerUpLeft, CornerUpRight
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { GoogleLogin } from '@react-oauth/google';
@@ -17,7 +19,9 @@ import './App.css';
 function App() {
   // --- CONFIGURATION ---
   // PROD: Uses Vercel Env Var. DEV: Uses localhost.
-  const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:10000";
+  const API_BASE = import.meta.env.DEV 
+    ? "http://localhost:10000" 
+    : (import.meta.env.VITE_API_BASE_URL || "http://localhost:10000");
 
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -52,18 +56,44 @@ function App() {
 
   // Job-Hunt Mode State
   const [jobHuntMode, setJobHuntMode] = useState(
-    localStorage.getItem('jobHuntMode') === 'true'
+    localStorage.getItem('jobHuntMode') === 'true' && !!localStorage.getItem('user')
   );
 
   // Job-Hunt Dashboard States
-  const [showJobHuntDashboard, setShowJobHuntDashboard] = useState(false);
+  const [currentView, setCurrentView] = useState('chat'); // 'chat' or 'dashboard'
+  const [dashboardSidebarTab, setDashboardSidebarTab] = useState('resume'); // 'resume', 'inbox', 'applied'
   const [isAnalyzingResume, setIsAnalyzingResume] = useState(false);
   const [atsScore, setAtsScore] = useState(null);
   const [atsSuggestions, setAtsSuggestions] = useState(null);
   const [agentLogs, setAgentLogs] = useState([]);
   const [appliedJobs, setAppliedJobs] = useState([]);
 
+  // Goal 7: Candidate Inbox states
+  const [dashboardTab, setDashboardTab] = useState('logs'); // 'logs', 'applied', 'inbox'
+  const [inboxEmails, setInboxEmails] = useState([]);
+  const [selectedEmail, setSelectedEmail] = useState(null);
+
   // Cover Letter Modal
+  const toggleStarEmail = (id) => {
+    setInboxEmails(prev => prev.map(e => e.id === id ? { ...e, starred: !e.starred } : e));
+    if (selectedEmail?.id === id) {
+      setSelectedEmail(prev => prev ? { ...prev, starred: !prev.starred } : null);
+    }
+  };
+
+  const toggleReadEmail = (id) => {
+    setInboxEmails(prev => prev.map(e => e.id === id ? { ...e, read: !e.read } : e));
+    if (selectedEmail?.id === id) {
+      setSelectedEmail(prev => prev ? { ...prev, read: !prev.read } : null);
+    }
+  };
+
+  const handleDeleteEmail = (id) => {
+    setInboxEmails(prev => prev.filter(e => e.id !== id));
+    if (selectedEmail?.id === id) {
+      setSelectedEmail(null);
+    }
+  };
   const [showCoverLetterModal, setShowCoverLetterModal] = useState(false);
   const [selectedCoverLetter, setSelectedCoverLetter] = useState('');
   const [selectedJobTitle, setSelectedJobTitle] = useState('');
@@ -74,6 +104,94 @@ function App() {
   const abortControllerRef = useRef(null);
   const menuRef = useRef(null);
   const btnRef = useRef(null);
+  const terminalEndRef = useRef(null);
+
+  const generateEmailBody = (app) => {
+    return `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #ffffff; color: #333333;">
+        <div style="border-bottom: 2px solid #f57c00; padding-bottom: 15px; margin-bottom: 20px; text-align: center;">
+          <h2 style="color: #f57c00; margin: 0;">${app.company}</h2>
+          <span style="font-size: 12px; color: #777777;">Official Careers Confirmation</span>
+        </div>
+        <p style="font-size: 16px; font-weight: bold; margin-top: 0;">Dear Candidate,</p>
+        <p>Thank you for your interest in joining <strong>${app.company}</strong>. We have successfully received your application for the position of <strong>${app.jobTitle}</strong> (${app.location || 'Remote'}).</p>
+        <p>Our hiring team is currently reviewing your qualifications and cover letter. We are impressed by your background and will reach out to you within the next 3-5 business days regarding the next steps of our interview process.</p>
+        
+        <div style="background-color: #f9f9f9; border: 1px dashed #cccccc; padding: 15px; border-radius: 6px; margin: 20px 0;">
+          <h4 style="margin-top: 0; color: #333333; border-bottom: 1px solid #eeeeee; padding-bottom: 5px;">Application Summary</h4>
+          <ul style="list-style: none; padding-left: 0; margin: 0; font-size: 14px; line-height: 1.6;">
+            <li><strong>Role:</strong> ${app.jobTitle}</li>
+            <li><strong>Company:</strong> ${app.company}</li>
+            <li><strong>Location:</strong> ${app.location || 'Remote'}</li>
+            <li><strong>Salary:</strong> ${app.salary || 'Competitive'}</li>
+            <li><strong>Status:</strong> Under Review</li>
+          </ul>
+        </div>
+
+        <p>A copy of your customized cover letter has been attached to your application file. You can also view it in your candidate history portal.</p>
+        
+        <p style="margin-bottom: 0;">Best regards,</p>
+        <p style="margin-top: 5px; font-weight: bold; color: #f57c00;">The ${app.company} Recruitment Team</p>
+        
+        <div style="border-top: 1px solid #eeeeee; margin-top: 25px; padding-top: 15px; text-align: center; font-size: 11px; color: #999999;">
+          This is an automated confirmation email. Please do not reply directly to this message.
+        </div>
+      </div>
+    `;
+  };
+
+  const fetchJobHuntHistory = async () => {
+    if (!user) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/resume/history`, {
+        headers: { 'Authorization': `Bearer ${user.token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.applications) {
+          setAppliedJobs(data.applications);
+          
+          const emails = data.applications.map(app => {
+            const domain = app.company.toLowerCase().replace(/[^a-z0-9]/g, '') || 'company';
+            return {
+              id: app._id,
+              fromName: `${app.company} Careers`,
+              fromEmail: `careers@${domain}.com`,
+              subject: `Application Confirmation - ${app.jobTitle}`,
+              date: new Date(app.appliedAt || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+              body: generateEmailBody(app),
+              coverLetter: app.coverLetter,
+              read: true
+            };
+          });
+          setInboxEmails(emails);
+        }
+        if (data.resumes && data.resumes.length > 0) {
+          setAtsScore(data.resumes[0].atsScore);
+          setAtsSuggestions({
+            skills: data.resumes[0].skills,
+            missingKeywords: data.resumes[0].missingKeywords,
+            contentSuggestions: data.resumes[0].contentSuggestions,
+            formattingSuggestions: data.resumes[0].formattingSuggestions
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching job hunt history:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (currentView === 'dashboard' && user) {
+      fetchJobHuntHistory();
+    }
+  }, [currentView, user]);
+
+  useEffect(() => {
+    if (currentView === 'dashboard') {
+      terminalEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [agentLogs, currentView]);
 
   // --- Theme Effect ---
   useEffect(() => {
@@ -85,6 +203,12 @@ function App() {
   useEffect(() => {
     localStorage.setItem('jobHuntMode', jobHuntMode);
     document.body.setAttribute('data-job-hunt', jobHuntMode);
+    if (jobHuntMode) {
+      setCurrentView('dashboard');
+      fetchJobHuntHistory();
+    } else {
+      setCurrentView('chat');
+    }
   }, [jobHuntMode]);
 
   // --- Warning Card Effects & Trigger ---
@@ -172,6 +296,29 @@ function App() {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
 
+  const handleToggleJobHuntMode = () => {
+    if (!user) {
+      Swal.fire({
+        title: 'Authentication Required',
+        text: 'Please log in to activate Job-Hunt Mode.',
+        icon: 'info',
+        showCancelButton: true,
+        confirmButtonColor: '#10a37f',
+        cancelButtonColor: '#444',
+        confirmButtonText: 'Log In Now',
+        background: theme === 'dark' ? '#171717' : '#edededff',
+        color: theme === 'dark' ? '#fff' : '#000'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          setAuthMode('login');
+          setShowAuth(true);
+        }
+      });
+      return;
+    }
+    setJobHuntMode(prev => !prev);
+  };
+
   const handleLogout = async () => {
     const result = await Swal.fire({
       title: 'Logout?',
@@ -187,6 +334,8 @@ function App() {
 
     if (result.isConfirmed) {
       localStorage.removeItem('user');
+      localStorage.removeItem('jobHuntMode');
+      setJobHuntMode(false);
       setUser(null);
       setMessages([]);
       setConversations([]);
@@ -254,6 +403,7 @@ function App() {
 
   const handleResumeUpload = async (file) => {
     if (!file) return;
+    setDashboardTab('logs');
     setIsAnalyzingResume(true);
     setAtsScore(null);
     setAtsSuggestions(null);
@@ -278,7 +428,12 @@ function App() {
       });
       
       if (!res.ok) {
-        throw new Error("Evaluation server error: status " + res.status);
+        let errMsg = "Evaluation server error: status " + res.status;
+        try {
+          const errData = await res.json();
+          if (errData && errData.error) errMsg = errData.error;
+        } catch (_) {}
+        throw new Error(errMsg);
       }
       
       const data = await res.json();
@@ -319,7 +474,12 @@ function App() {
         });
         
         if (!applyRes.ok) {
-          throw new Error("Application server error: status " + applyRes.status);
+          let errMsg = "Application server error: status " + applyRes.status;
+          try {
+            const errData = await applyRes.json();
+            if (errData && errData.error) errMsg = errData.error;
+          } catch (_) {}
+          throw new Error(errMsg);
         }
         
         const applyData = await applyRes.json();
@@ -327,17 +487,42 @@ function App() {
           throw new Error(applyData.error || "Job application flow failed");
         }
 
+        const sourceLabel = applyData.apiUsed ? `via ${applyData.apiUsed}` : "via AI Simulation";
+        const freshApps = applyData.applications.filter(app => app.status !== 'skipped');
+        const skippedApps = applyData.applications.filter(app => app.status === 'skipped');
+
         setAgentLogs(prev => [
           ...prev,
-          `🎯 [Job Agent] Found ${applyData.applications.length} matching job openings.`,
-          ...applyData.applications.flatMap(app => [
-            `📝 [Apply Agent] Custom cover letter generated for "${app.jobTitle}" at "${app.company}".`,
-            `🚀 [Apply Agent] Application submitted successfully to ${app.company}. (Status: APPLIED)`
-          ]),
-          "🏆 [System] Autonomous job hunt completed successfully. All details logged in your history!"
+          `🎯 [Job Agent] Found ${applyData.applications.length} matching job openings ${sourceLabel}.`,
+          ...applyData.applications.flatMap(app => 
+            app.status === 'skipped'
+              ? [`⚠️ [Job Agent] Already applied to "${app.company}". Skipping duplicate submission.`]
+              : [
+                  `📝 [Apply Agent] Custom cover letter generated for "${app.jobTitle}" at "${app.company}".`,
+                  `🚀 [Apply Agent] Application submitted successfully to ${app.company}. (Status: APPLIED)`
+                ]
+          ),
+          freshApps.length > 0 
+            ? `🏆 [System] Autonomous job hunt completed. Submitted ${freshApps.length} fresh application(s).`
+            : `🏆 [System] Autonomous job hunt completed. No fresh applications submitted (skipped ${skippedApps.length} duplicates).`
         ]);
 
-        setAppliedJobs(applyData.applications);
+        setAppliedJobs(prev => [...freshApps, ...prev]);
+
+        const newEmails = freshApps.map(app => {
+          const domain = app.company.toLowerCase().replace(/[^a-z0-9]/g, '') || 'company';
+          return {
+            id: app._id || Math.random().toString(36).substr(2, 9),
+            fromName: `${app.company} Careers`,
+            fromEmail: `careers@${domain}.com`,
+            subject: `Application Confirmation - ${app.jobTitle}`,
+            date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+            body: generateEmailBody(app),
+            coverLetter: app.coverLetter,
+            read: false
+          };
+        });
+        setInboxEmails(prev => [...newEmails, ...prev]);
       }
 
     } catch (err) {
@@ -541,7 +726,7 @@ function App() {
 
           <div 
             className={`job-hunt-toggle ${jobHuntMode ? 'active' : ''}`} 
-            onClick={() => setJobHuntMode(!jobHuntMode)} 
+            onClick={handleToggleJobHuntMode} 
             title="Toggle Job-Hunt Mode"
           >
             <Briefcase size={16} />
@@ -564,7 +749,8 @@ function App() {
         </div>
       </nav>
 
-      <div className="body-container">
+      {currentView === 'chat' ? (
+        <div className="body-container">
         {/* --- MOBILE OVERLAY --- */}
         {isSidebarOpen && (
           <div className="mobile-overlay" onClick={() => setIsSidebarOpen(false)}></div>
@@ -657,7 +843,7 @@ function App() {
               {showAttachMenu && (
                 <div className="attach-menu-popover" ref={menuRef}>
                   {jobHuntMode && (
-                    <button className="menu-item ats-option" onClick={() => { setShowJobHuntDashboard(true); setShowAttachMenu(false); }}>
+                    <button className="menu-item ats-option" onClick={() => { setCurrentView('dashboard'); setDashboardSidebarTab('resume'); setShowAttachMenu(false); }}>
                       <Briefcase size={18} style={{ color: '#f57c00' }} /> <span style={{ color: '#f57c00', fontWeight: 'bold' }}>ATS Auto-Apply</span>
                     </button>
                   )}
@@ -736,6 +922,374 @@ function App() {
           </div>
         </main>
       </div>
+      ) : (
+        <div className="job-dashboard-page">
+          <aside className="job-dashboard-sidebar">
+            <button 
+              className={`sidebar-nav-item ${dashboardSidebarTab === 'resume' ? 'active' : ''}`}
+              onClick={() => setDashboardSidebarTab('resume')}
+            >
+              <FileText size={16} /> Resume & ATS
+            </button>
+            <button 
+              className={`sidebar-nav-item ${dashboardSidebarTab === 'inbox' ? 'active' : ''}`}
+              onClick={() => setDashboardSidebarTab('inbox')}
+            >
+              <Mail size={16} /> Inbox
+              {inboxEmails.filter(e => !e.read).length > 0 && (
+                <span className="inbox-badge">{inboxEmails.filter(e => !e.read).length}</span>
+              )}
+            </button>
+            <button 
+              className={`sidebar-nav-item ${dashboardSidebarTab === 'applied' ? 'active' : ''}`}
+              onClick={() => setDashboardSidebarTab('applied')}
+            >
+              <Briefcase size={16} /> Applied Jobs
+            </button>
+          </aside>
+
+          <main className="job-dashboard-main-content">
+            {dashboardSidebarTab === 'resume' && (
+              <div className="resume-workflow-container">
+                {/* Stage 1: Upload & Evaluation (atsScore === null OR atsScore < 80) */}
+                {(atsScore === null || atsScore < 80) && (
+                  <div className="resume-upload-evaluation-stage">
+                    {/* Upload Dropzone */}
+                    {atsScore === null && (
+                      <>
+                        <div className={`resume-dropzone ${isAnalyzingResume ? 'analyzing' : ''}`}>
+                          <input 
+                            type="file" 
+                            id="resume-file-input"
+                            accept=".pdf,.txt,.doc,.docx"
+                            style={{ display: 'none' }}
+                            disabled={isAnalyzingResume}
+                            onChange={(e) => {
+                              if (e.target.files && e.target.files[0]) {
+                                handleResumeUpload(e.target.files[0]);
+                              }
+                            }}
+                          />
+                          <label htmlFor="resume-file-input" className="dropzone-label">
+                            <Paperclip size={32} />
+                            <span>{isAnalyzingResume ? "Analyzing Resume..." : "Drag & Drop Resume or Click to Upload"}</span>
+                            <small>Supports PDF, DOCX, TXT (Max 5MB)</small>
+                          </label>
+                        </div>
+                        
+                        {!isAnalyzingResume && (
+                          <div className="resume-motivational-illustration">
+                            <div className="pulse-network">
+                              <div className="pulse-circle c1"></div>
+                              <div className="pulse-circle c2"></div>
+                              <div className="pulse-circle c3"></div>
+                              <div className="center-node">
+                                <Briefcase size={24} style={{ color: '#f57c00' }} />
+                              </div>
+                            </div>
+                            <h3>Autonomous Job Applying Agent</h3>
+                            <p>Upload your resume to evaluate your ATS score. Our agent will automatically search matching job boards, write tailored cover letters, and submit applications on your behalf.</p>
+                            <div className="feature-badges">
+                              <span className="badge">✓ Real-time Live Jobs</span>
+                              <span className="badge">✓ Custom Cover Letters</span>
+                              <span className="badge">✓ Anti-Duplicate Check</span>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {/* ATS Score & Suggestions (If score < 80) */}
+                    {atsScore !== null && atsScore < 80 && (
+                      <div className="ats-results-box">
+                        <div className="ats-results-header">
+                          <div className="gauge-container">
+                            <div className={`ats-gauge ${atsScore >= 80 ? 'pass' : 'fail'}`} style={{ '--score-percentage': `${atsScore}` }}>
+                              <div className="gauge-inner">
+                                <span className="gauge-value">{atsScore}%</span>
+                                <span className="gauge-label">ATS Score</span>
+                              </div>
+                            </div>
+                          </div>
+                          <button 
+                            className="restart-btn"
+                            onClick={() => {
+                              setAtsScore(null);
+                              setAtsSuggestions(null);
+                              setAgentLogs([]);
+                              setSelectedFile(null);
+                            }}
+                          >
+                            <RefreshCw size={14} /> Try Another Resume
+                          </button>
+                        </div>
+                        
+                        <div className="suggestions-list">
+                          <h3>Optimization Suggestions</h3>
+                          {atsSuggestions.missingKeywords && atsSuggestions.missingKeywords.length > 0 && (
+                            <div className="suggestion-section">
+                              <h4>Missing Keywords</h4>
+                              <div className="keyword-tags">
+                                {atsSuggestions.missingKeywords.map((kw, i) => (
+                                  <span key={i} className="keyword-tag">{kw}</span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {atsSuggestions.contentSuggestions && atsSuggestions.contentSuggestions.length > 0 && (
+                            <div className="suggestion-section">
+                              <h4>Content Improvements</h4>
+                              <ul>
+                                {atsSuggestions.contentSuggestions.map((sug, i) => (
+                                  <li key={i}>{sug}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          
+                          {atsSuggestions.formattingSuggestions && atsSuggestions.formattingSuggestions.length > 0 && (
+                            <div className="suggestion-section">
+                              <h4>Layout & Formatting</h4>
+                              <ul>
+                                {atsSuggestions.formattingSuggestions.map((sug, i) => (
+                                  <li key={i}>{sug}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* While ATS check is running, show a progress log or status */}
+                    {isAnalyzingResume && (
+                      <div className="ats-analyzing-progress">
+                        <div className="progress-spinner"></div>
+                        <div className="progress-text">Evaluator is scanning text, checking keywords, and calculating ATS score...</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Stage 2: Agent Execution Log (atsScore >= 80) */}
+                {atsScore !== null && atsScore >= 80 && (
+                  <div className="agent-terminal-full">
+                    <div className="terminal-header">
+                      <div className="terminal-dots">
+                        <span className="terminal-dot red"></span>
+                        <span className="terminal-dot yellow"></span>
+                        <span className="terminal-dot green"></span>
+                      </div>
+                      <span className="terminal-title">Agent Execution Log</span>
+                      <span className="terminal-status-badge">{isAnalyzingResume ? "ACTIVE" : "COMPLETED"}</span>
+                    </div>
+                    <div className="terminal-content">
+                      {agentLogs.length === 0 ? (
+                        <div className="terminal-empty">No execution logs yet. Upload your resume to start.</div>
+                      ) : (
+                        agentLogs.map((log, i) => (
+                          <div key={i} className="terminal-line">{log}</div>
+                        ))
+                      )}
+                      {isAnalyzingResume && <div className="terminal-line pulse-line">█ Agent is processing...</div>}
+                      <div ref={terminalEndRef} />
+                    </div>
+
+                    {/* Stage 3: Process End Stage button */}
+                    {!isAnalyzingResume && (
+                      <div className="terminal-action-area">
+                        <button 
+                          className="apply-new-resume-btn"
+                          onClick={() => {
+                            setAtsScore(null);
+                            setAtsSuggestions(null);
+                            setAgentLogs([]);
+                            setSelectedFile(null);
+                          }}
+                        >
+                          <RefreshCw size={16} /> Apply with New Resume
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {dashboardSidebarTab === 'inbox' && (
+              <div className="inbox-split-pane gmail-style">
+                <div className="email-list-side gmail-list-pane">
+                  <div className="gmail-toolbar">
+                    <input type="checkbox" className="gmail-checkbox-all" checked={inboxEmails.length > 0 && inboxEmails.every(e => e.read)} onChange={() => {
+                      const allRead = inboxEmails.every(e => e.read);
+                      setInboxEmails(prev => prev.map(e => ({ ...e, read: !allRead })));
+                    }} title="Select all / Mark all read" />
+                    <button className="gmail-toolbar-btn" onClick={() => {
+                      fetchJobHuntHistory();
+                    }} title="Refresh Inbox">
+                      <RefreshCw size={14} />
+                    </button>
+                    <span className="gmail-inbox-title">Inbox ({inboxEmails.filter(e => !e.read).length})</span>
+                  </div>
+                  {inboxEmails.length === 0 ? (
+                    <div className="inbox-empty-state">No confirmation emails yet.</div>
+                  ) : (
+                    <div className="gmail-email-list">
+                      {inboxEmails.map((email) => {
+                        const emailSnippet = "We have received your job application and are checking your profile details...";
+                        return (
+                          <div 
+                            key={email.id} 
+                            className={`gmail-email-item ${email.read ? 'read' : 'unread'} ${selectedEmail?.id === email.id ? 'selected' : ''}`}
+                            onClick={() => {
+                              setSelectedEmail(email);
+                              setInboxEmails(prev => prev.map(e => e.id === email.id ? { ...e, read: true } : e));
+                            }}
+                          >
+                            <div className="gmail-item-left-controls">
+                              <span 
+                                className={`gmail-star-icon ${email.starred ? 'starred' : ''}`} 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleStarEmail(email.id);
+                                }}
+                              >
+                                <Star size={16} fill={email.starred ? "#f59e0b" : "none"} stroke={email.starred ? "#f59e0b" : "currentColor"} />
+                              </span>
+                            </div>
+                            <div className="gmail-item-main-content">
+                              <div className="gmail-item-row-top">
+                                <span className="gmail-sender-name">{email.fromName}</span>
+                                <span className="gmail-item-time">{email.date}</span>
+                              </div>
+                              <div className="gmail-item-row-bottom">
+                                <span className="gmail-subject-text">{email.subject}</span>
+                                <span className="gmail-body-snippet"> - {emailSnippet}</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                <div className="email-reader-side gmail-reader-pane">
+                  {selectedEmail ? (
+                    <div className="gmail-email-container">
+                      <div className="gmail-reader-toolbar">
+                        <button className="gmail-toolbar-btn" onClick={() => toggleReadEmail(selectedEmail.id)} title={selectedEmail.read ? "Mark as unread" : "Mark as read"}>
+                          <Mail size={16} />
+                        </button>
+                        <button className="gmail-toolbar-btn" onClick={() => toggleStarEmail(selectedEmail.id)} title={selectedEmail.starred ? "Unstar" : "Star"}>
+                          <Star size={16} fill={selectedEmail.starred ? "#f59e0b" : "none"} stroke={selectedEmail.starred ? "#f59e0b" : "currentColor"} />
+                        </button>
+                        <button className="gmail-toolbar-btn" onClick={() => handleDeleteEmail(selectedEmail.id)} title="Delete email">
+                          <Trash2 size={16} />
+                        </button>
+                        <button className="gmail-toolbar-btn" title="Archive">
+                          <Archive size={16} />
+                        </button>
+                        <span className="gmail-toolbar-divider">|</span>
+                        <button className="gmail-toolbar-btn" title="More options">
+                          <MoreVertical size={16} />
+                        </button>
+                      </div>
+                      
+                      <div className="gmail-reader-content">
+                        <h1 className="gmail-reader-subject">{selectedEmail.subject}</h1>
+                        
+                        <div className="gmail-reader-sender-row">
+                          <div className="gmail-avatar">
+                            {selectedEmail.fromName[0].toUpperCase()}
+                          </div>
+                          <div className="gmail-sender-details">
+                            <div className="gmail-sender-info">
+                              <span className="gmail-sender-display-name">{selectedEmail.fromName}</span>
+                              <span className="gmail-sender-address">&lt;{selectedEmail.fromEmail}&gt;</span>
+                            </div>
+                            <div className="gmail-to-details">
+                              to me ▾
+                            </div>
+                          </div>
+                          <div className="gmail-reader-time">
+                            {selectedEmail.date}
+                          </div>
+                        </div>
+
+                        <div className="gmail-email-iframe-wrapper">
+                          <iframe 
+                            srcDoc={selectedEmail.body}
+                            title="Email Preview"
+                            className="email-body-iframe"
+                            sandbox="allow-same-origin"
+                          />
+                        </div>
+
+                        <div className="gmail-reply-box">
+                          <button className="gmail-reply-btn"><CornerUpLeft size={14} /> Reply</button>
+                          <button className="gmail-reply-btn"><CornerUpRight size={14} /> Forward</button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="email-reader-placeholder gmail-placeholder">
+                      <Mail size={48} className="envelope-icon" style={{ opacity: 0.5 }} />
+                      <p>Select an item to read</p>
+                      <small style={{ opacity: 0.6 }}>Nothing is selected</small>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {dashboardSidebarTab === 'applied' && (
+              <div className="applied-jobs-box">
+                <h3>Autonomously Applied Positions</h3>
+                {appliedJobs.length === 0 ? (
+                  <div className="applied-empty-state">No applied positions yet. Upload a matching resume (Score &ge; 80) to apply.</div>
+                ) : (
+                  <div className="jobs-table-container">
+                    <table className="jobs-table">
+                      <thead>
+                        <tr>
+                          <th style={{ width: '60px' }}>#</th>
+                          <th>Job Title</th>
+                          <th>Company</th>
+                          <th>Location</th>
+                          <th>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {appliedJobs.map((app, i) => (
+                          <tr key={i}>
+                            <td><strong>{i + 1}</strong></td>
+                            <td><strong>{app.jobTitle}</strong></td>
+                            <td>{app.company}</td>
+                            <td>{app.location || 'Remote'}</td>
+                            <td>
+                              <button 
+                                className="view-letter-btn"
+                                onClick={() => {
+                                  setSelectedCoverLetter(app.coverLetter);
+                                  setSelectedJobTitle(app.jobTitle);
+                                  setShowCoverLetterModal(true);
+                                }}
+                              >
+                                Cover Letter
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </main>
+        </div>
+      )}
 
       {showAuth && (
         <div className="auth-overlay" onClick={() => setShowAuth(false)}>
@@ -803,158 +1357,7 @@ function App() {
         </div>
       )}
 
-      {showJobHuntDashboard && (
-        <div className="dashboard-overlay" onClick={() => setShowJobHuntDashboard(false)}>
-          <div className="dashboard-card" onClick={e => e.stopPropagation()}>
-            <button className="dashboard-close" onClick={() => setShowJobHuntDashboard(false)}>×</button>
-            
-            <div className="dashboard-header">
-              <Briefcase size={28} className="dashboard-header-icon" />
-              <h2>Agentic AI Job-Hunt System</h2>
-            </div>
-            
-            <div className="dashboard-body">
-              {/* Left Side: Upload & ATS Score */}
-              <div className="dashboard-left-panel">
-                <div className="resume-dropzone">
-                  <input 
-                    type="file" 
-                    id="resume-file-input"
-                    accept=".pdf,.txt,.doc,.docx"
-                    style={{ display: 'none' }}
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files[0]) {
-                        handleResumeUpload(e.target.files[0]);
-                      }
-                    }}
-                  />
-                  <label htmlFor="resume-file-input" className="dropzone-label">
-                    <Paperclip size={32} />
-                    <span>Drag & Drop Resume or Click to Upload</span>
-                    <small>Supports PDF, DOCX, TXT (Max 5MB)</small>
-                  </label>
-                </div>
-                
-                {atsScore !== null && (
-                  <div className="ats-results-box">
-                    <div className="gauge-container">
-                      <div className={`ats-gauge ${atsScore >= 80 ? 'pass' : 'fail'}`} style={{ '--score-percentage': `${atsScore}` }}>
-                        <div className="gauge-inner">
-                          <span className="gauge-value">{atsScore}%</span>
-                          <span className="gauge-label">ATS Score</span>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {atsScore < 80 ? (
-                      <div className="suggestions-list">
-                        <h3>Optimization Suggestions</h3>
-                        
-                        {atsSuggestions.missingKeywords.length > 0 && (
-                          <div className="suggestion-section">
-                            <h4>Missing Keywords</h4>
-                            <div className="keyword-tags">
-                              {atsSuggestions.missingKeywords.map((kw, i) => (
-                                <span key={i} className="keyword-tag">{kw}</span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        
-                        {atsSuggestions.contentSuggestions.length > 0 && (
-                          <div className="suggestion-section">
-                            <h4>Content Improvements</h4>
-                            <ul>
-                              {atsSuggestions.contentSuggestions.map((sug, i) => (
-                                <li key={i}>{sug}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                        
-                        {atsSuggestions.formattingSuggestions.length > 0 && (
-                          <div className="suggestion-section">
-                            <h4>Layout & Formatting</h4>
-                            <ul>
-                              {atsSuggestions.formattingSuggestions.map((sug, i) => (
-                                <li key={i}>{sug}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="success-badge-box">
-                        <Check size={20} className="success-badge-icon" />
-                        <span>ATS score meets job application requirements!</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-              
-              {/* Right Side: Agent Terminal & Jobs Applied */}
-              <div className="dashboard-right-panel">
-                {(isAnalyzingResume || agentLogs.length > 0) && (
-                  <div className="agent-terminal">
-                    <div className="terminal-header">
-                      <span className="terminal-dot red"></span>
-                      <span className="terminal-dot yellow"></span>
-                      <span className="terminal-dot green"></span>
-                      <span className="terminal-title">Agent Execution Log</span>
-                    </div>
-                    <div className="terminal-content">
-                      {agentLogs.map((log, i) => (
-                        <div key={i} className="terminal-line">{log}</div>
-                      ))}
-                      {isAnalyzingResume && <div className="terminal-line pulse-line">█ Agent is processing...</div>}
-                    </div>
-                  </div>
-                )}
-                
-                {appliedJobs.length > 0 && (
-                  <div className="applied-jobs-box">
-                    <h3>Autonomously Applied Positions</h3>
-                    <div className="jobs-table-container">
-                      <table className="jobs-table">
-                        <thead>
-                          <tr>
-                            <th>Job Title</th>
-                            <th>Company</th>
-                            <th>Location</th>
-                            <th>Action</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {appliedJobs.map((app, i) => (
-                            <tr key={i}>
-                              <td><strong>{app.jobTitle}</strong></td>
-                              <td>{app.company}</td>
-                              <td>{app.location || 'Remote'}</td>
-                              <td>
-                                <button 
-                                  className="view-letter-btn"
-                                  onClick={() => {
-                                    setSelectedCoverLetter(app.coverLetter);
-                                    setSelectedJobTitle(app.jobTitle);
-                                    setShowCoverLetterModal(true);
-                                  }}
-                                >
-                                  Cover Letter
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Job Dashboard Modal Removed - Migrated to full-page dashboard view */}
 
       {/* Cover Letter Sub-Modal */}
       {showCoverLetterModal && (
