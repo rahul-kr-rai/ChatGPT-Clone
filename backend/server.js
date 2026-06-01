@@ -145,6 +145,30 @@ function fileToGenerativePart(buffer, mimeType) {
   };
 }
 
+// Helper to query Gemini with retry on transient errors (503 Service Unavailable, 429 Rate Limit/Quota, etc.)
+async function generateContentWithRetry(model, promptParts, retries = 3, delay = 1000) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await model.generateContent(promptParts);
+    } catch (error) {
+      const isTransient = error.status === 503 || error.status === 429 || 
+                          (error.message && (error.message.includes("503") || 
+                           error.message.toLowerCase().includes("quota") || 
+                           error.message.includes("429") ||
+                           error.message.toLowerCase().includes("rate limit") ||
+                           error.message.toLowerCase().includes("overloaded") ||
+                           error.message.toLowerCase().includes("busy")));
+      if (isTransient && i < retries - 1) {
+        console.warn(`⚠️ Gemini API transient error (status ${error.status || 'unknown'}): "${error.message}". Retrying in ${delay}ms... (Attempt ${i + 1}/${retries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        delay *= 2; // Exponential backoff
+      } else {
+        throw error;
+      }
+    }
+  }
+}
+
 function escapeHtml(str) {
   if (!str) return '';
   return String(str)
@@ -197,7 +221,7 @@ app.post('/api/chat', apiLimiter, optionalAuth, upload.single('file'), async (re
       return res.status(400).json({ error: "Message or file is required" });
     }
 
-    const result = await model.generateContent(promptParts);
+    const result = await generateContentWithRetry(model, promptParts);
     const botResponse = result.response.text();
 
     if (req.user) {
@@ -290,7 +314,7 @@ app.post('/api/resume/evaluate', apiLimiter, optionalAuth, upload.single('file')
       }
     `;
 
-    const result = await model.generateContent([prompt, filePart]);
+    const result = await generateContentWithRetry(model, [prompt, filePart]);
     const responseText = result.response.text().trim();
 
     let evaluation;
@@ -458,7 +482,7 @@ app.post('/api/resume/auto-apply', apiLimiter, optionalAuth, async (req, res) =>
         ]
       `;
 
-      const searchResult = await model.generateContent(searchPrompt);
+      const searchResult = await generateContentWithRetry(model, searchPrompt);
       const searchResponseText = searchResult.response.text().trim();
 
       try {
@@ -522,7 +546,7 @@ app.post('/api/resume/auto-apply', apiLimiter, optionalAuth, async (req, res) =>
         Maintain a polite, confident, and professional tone. Do not include placeholders like "[Your Name]" or "[Date]" in brackets; write it as a finished cover letter.
       `;
 
-      const coverLetterResult = await model.generateContent(coverLetterPrompt);
+      const coverLetterResult = await generateContentWithRetry(model, coverLetterPrompt);
       const coverLetterText = coverLetterResult.response.text().trim();
 
       const newApplication = new JobApplication({

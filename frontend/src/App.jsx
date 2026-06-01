@@ -542,6 +542,14 @@ function App() {
     } catch (err) {
       console.error(err);
       setAgentLogs(prev => [...prev, `❌ [Error] Process failed: ${err.message}`]);
+      Swal.fire({
+        title: 'Resume Evaluation Failed',
+        text: err.message || 'Something went wrong during resume evaluation. Please try again.',
+        icon: 'error',
+        confirmButtonColor: '#10a37f',
+        background: theme === 'dark' ? '#232323ff' : '#edededff',
+        color: theme === 'dark' ? '#fff' : '#000'
+      });
     } finally {
       setIsAnalyzingResume(false);
     }
