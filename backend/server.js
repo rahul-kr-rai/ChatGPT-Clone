@@ -145,29 +145,48 @@ function fileToGenerativePart(buffer, mimeType) {
   };
 }
 
-// Helper to query Gemini with retry on transient errors (503 Service Unavailable, 429 Rate Limit/Quota, etc.)
-async function generateContentWithRetry(model, promptParts, retries = 3, delay = 1000) {
-  for (let i = 0; i < retries; i++) {
+// Helper to query Gemini with automatic model failover and retries on transient errors
+async function generateContentWithFallback(promptParts, systemInstruction = undefined, retriesPerModel = 2, delay = 1000) {
+  const models = ["gemini-3.5-flash", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"];
+  let lastError = null;
+
+  for (const modelName of models) {
     try {
-      return await model.generateContent(promptParts);
-    } catch (error) {
-      const isTransient = error.status === 503 || error.status === 429 || 
-                          (error.message && (error.message.includes("503") || 
-                           error.message.toLowerCase().includes("quota") || 
-                           error.message.includes("429") ||
-                           error.message.toLowerCase().includes("rate limit") ||
-                           error.message.toLowerCase().includes("overloaded") ||
-                           error.message.toLowerCase().includes("busy")));
-      if (isTransient && i < retries - 1) {
-        console.warn(`⚠️ Gemini API transient error (status ${error.status || 'unknown'}): "${error.message}". Retrying in ${delay}ms... (Attempt ${i + 1}/${retries})`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        delay *= 2; // Exponential backoff
-      } else {
-        throw error;
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        systemInstruction: systemInstruction
+      });
+
+      let currentDelay = delay;
+      for (let i = 0; i < retriesPerModel; i++) {
+        try {
+          return await model.generateContent(promptParts);
+        } catch (error) {
+          lastError = error;
+          const isTransient = error.status === 503 || error.status === 429 || 
+                              (error.message && (error.message.includes("503") || 
+                               error.message.toLowerCase().includes("quota") || 
+                               error.message.includes("429") ||
+                               error.message.toLowerCase().includes("rate limit") ||
+                               error.message.toLowerCase().includes("overloaded") ||
+                               error.message.toLowerCase().includes("busy")));
+          if (isTransient && i < retriesPerModel - 1) {
+            console.warn(`⚠️ Model ${modelName} transient error (status ${error.status || 'unknown'}): "${error.message}". Retrying in ${currentDelay}ms... (Attempt ${i + 1}/${retriesPerModel})`);
+            await new Promise(resolve => setTimeout(resolve, currentDelay));
+            currentDelay *= 2;
+          } else {
+            throw error; // throw to failover to next model
+          }
+        }
       }
+    } catch (modelError) {
+      console.warn(`⚠️ Model ${modelName} failed or exhausted retries. Trying next model... Error: ${modelError.message}`);
     }
   }
+
+  throw lastError || new Error("All models failed to generate content.");
 }
+
 
 function escapeHtml(str) {
   if (!str) return '';
@@ -189,27 +208,24 @@ app.post('/api/chat', apiLimiter, optionalAuth, upload.single('file'), async (re
     }
 
     // UPDATED: Advanced System Instruction with Persona
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
-      systemInstruction: {
-        parts: [{
-          text: `You are 'AI ChatBot', a sophisticated and helpful virtual assistant designed and developed by Rahul Kumar Rai.
+    const systemInstruction = {
+      parts: [{
+        text: `You are 'AI ChatBot', a sophisticated and helpful virtual assistant designed and developed by Rahul Kumar Rai.
 
-          YOUR IDENTITY:
-          - Creator: Rahul Kumar Rai (a Full Stack Developer).
-          - Purpose: To assist users with coding, creativity, and general knowledge.
-          - Abilities: Job-Hunt mode (Auto-resume scanning, ATS score checking, Auto-job apply, Auto-cover letter writing, Generate resume and cover letter, Analyze job description and company), Write code, create content, answer questions, provide information, and assist with various tasks.
-          - Personality: Professional, enthusiastic, and clear.
+        YOUR IDENTITY:
+        - Creator: Rahul Kumar Rai (a Full Stack Developer).
+        - Purpose: To assist users with coding, creativity, and general knowledge.
+        - Abilities: Job-Hunt mode (Auto-resume scanning, ATS score checking, Auto-job apply, Auto-cover letter writing, Generate resume and cover letter, Analyze job description and company), Write code, create content, answer questions, provide information, and assist with various tasks.
+        - Personality: Professional, enthusiastic, and clear.
 
-          YOUR GUIDELINES:
-          1. OWNERSHIP: If asked "Who created you?", "Who owns you?", or "Who made you?", always answer: "I was created by Rahul Kumar Rai."
-          2. FORMATTING: Always use clear Markdown formatting. Use bolding for key terms and code blocks for any programming examples.
-          3. TONE: Be helpful and encouraging. If a user is stuck on code, explain the logic step-by-step.
-          4. SAFETY: Do not share personal private data about your creator other than his name.
-          `
-        }]
-      }
-    });
+        YOUR GUIDELINES:
+        1. OWNERSHIP: If asked "Who created you?", "Who owns you?", or "Who made you?", always answer: "I was created by Rahul Kumar Rai."
+        2. FORMATTING: Always use clear Markdown formatting. Use bolding for key terms and code blocks for any programming examples.
+        3. TONE: Be helpful and encouraging. If a user is stuck on code, explain the logic step-by-step.
+        4. SAFETY: Do not share personal private data about your creator other than his name.
+        `
+      }]
+    };
 
     let promptParts = [];
     if (message) promptParts.push(message);
@@ -221,7 +237,7 @@ app.post('/api/chat', apiLimiter, optionalAuth, upload.single('file'), async (re
       return res.status(400).json({ error: "Message or file is required" });
     }
 
-    const result = await generateContentWithRetry(model, promptParts);
+    const result = await generateContentWithFallback(promptParts, systemInstruction);
     const botResponse = result.response.text();
 
     if (req.user) {
@@ -294,14 +310,11 @@ app.post('/api/resume/evaluate', apiLimiter, optionalAuth, upload.single('file')
       return res.status(500).json({ error: "AI service unavailable" });
     }
 
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
-      systemInstruction: {
-        parts: [{
-          text: "You are an expert ATS (Applicant Tracking System) auditor. Analyze the uploaded resume and return a structured JSON response matching the requested schema."
-        }]
-      }
-    });
+    const systemInstruction = {
+      parts: [{
+        text: "You are an expert ATS (Applicant Tracking System) auditor. Analyze the uploaded resume and return a structured JSON response matching the requested schema."
+      }]
+    };
     const filePart = fileToGenerativePart(file.buffer, file.mimetype);
 
     const prompt = `
@@ -320,7 +333,7 @@ app.post('/api/resume/evaluate', apiLimiter, optionalAuth, upload.single('file')
       }
     `;
 
-    const result = await generateContentWithRetry(model, [prompt, filePart]);
+    const result = await generateContentWithFallback([prompt, filePart], systemInstruction);
     const responseText = result.response.text().trim();
 
     let evaluation;
@@ -388,14 +401,11 @@ app.post('/api/resume/auto-apply', apiLimiter, optionalAuth, async (req, res) =>
       return res.status(500).json({ error: "AI service unavailable" });
     }
 
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
-      systemInstruction: {
-        parts: [{
-          text: "You are an expert job search matching agent and cover letter writer."
-        }]
-      }
-    });
+    const systemInstruction = {
+      parts: [{
+        text: "You are an expert job search matching agent and cover letter writer."
+      }]
+    };
 
     let jobListings = [];
     let apiUsed = null;
@@ -488,7 +498,7 @@ app.post('/api/resume/auto-apply', apiLimiter, optionalAuth, async (req, res) =>
         ]
       `;
 
-      const searchResult = await generateContentWithRetry(model, searchPrompt);
+      const searchResult = await generateContentWithFallback(searchPrompt, systemInstruction);
       const searchResponseText = searchResult.response.text().trim();
 
       try {
@@ -552,7 +562,7 @@ app.post('/api/resume/auto-apply', apiLimiter, optionalAuth, async (req, res) =>
         Maintain a polite, confident, and professional tone. Do not include placeholders like "[Your Name]" or "[Date]" in brackets; write it as a finished cover letter.
       `;
 
-      const coverLetterResult = await generateContentWithRetry(model, coverLetterPrompt);
+      const coverLetterResult = await generateContentWithFallback(coverLetterPrompt, systemInstruction);
       const coverLetterText = coverLetterResult.response.text().trim();
 
       const newApplication = new JobApplication({
