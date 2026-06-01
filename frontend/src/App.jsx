@@ -465,12 +465,12 @@ function App() {
       setAgentLogs(prev => [
         ...prev,
         `📈 [AI Agent] ATS score audit completed. Score: ${score}%`,
-        score >= 80 
-          ? "✅ [AI Agent] ATS Score meets threshold (80%). Initiating autonomous job hunt..."
-          : "⚠️ [AI Agent] ATS Score is below threshold (80%). Providing targeted recommendations to optimize your resume."
+        score >= 70 
+          ? "✅ [AI Agent] ATS Score meets threshold (70%). Initiating autonomous job hunt..."
+          : "⚠️ [AI Agent] ATS Score is below threshold (70%). Providing targeted recommendations to optimize your resume."
       ]);
 
-      if (score >= 80) {
+      if (score >= 70) {
         setAgentLogs(prev => [
           ...prev,
           `🔍 [Job Agent] Searching matching positions for query: "${data.resume.jobSearchQuery}"...`
@@ -610,7 +610,7 @@ function App() {
         setMessages(prev => [...prev, { role: 'bot', text: "*Generation stopped by user.*" }]);
       } else {
         console.error(err);
-        setMessages(prev => [...prev, { role: 'bot', text: "Error sending message." }]);
+        setMessages(prev => [...prev, { role: 'bot', text: `❌ **Error:** ${err.message || "Error sending message."}` }]);
       }
     } finally {
       setIsLoading(false);
@@ -1068,12 +1068,12 @@ function App() {
                       </>
                     )}
 
-                    {/* ATS Score & Suggestions (If score < 80) */}
-                    {atsScore !== null && atsScore < 80 && (
+                    {/* ATS Score & Suggestions (If score < 70) */}
+                    {atsScore !== null && atsScore < 70 && (
                       <div className="ats-results-box">
                         <div className="ats-results-header">
                           <div className="gauge-container">
-                            <div className={`ats-gauge ${atsScore >= 80 ? 'pass' : 'fail'}`} style={{ '--score-percentage': `${atsScore}` }}>
+                            <div className={`ats-gauge ${atsScore >= 70 ? 'pass' : 'fail'}`} style={{ '--score-percentage': `${atsScore}` }}>
                               <div className="gauge-inner">
                                 <span className="gauge-value">{atsScore}%</span>
                                 <span className="gauge-label">ATS Score</span>
@@ -1141,8 +1141,8 @@ function App() {
                   </div>
                 )}
 
-                {/* Stage 2: Agent Execution Log (atsScore >= 80) */}
-                {atsScore !== null && atsScore >= 80 && (
+                {/* Stage 2: Agent Execution Log (atsScore >= 70) */}
+                {atsScore !== null && atsScore >= 70 && (
                   <div className="agent-terminal-full">
                     <div className="terminal-header">
                       <div className="terminal-dots">

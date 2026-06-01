@@ -251,7 +251,13 @@ app.post('/api/chat', apiLimiter, optionalAuth, upload.single('file'), async (re
     res.json({ text: botResponse });
   } catch (error) {
     console.error("🔴 Server Error:", error);
-    res.status(500).json({ error: error.message || "AI Generation Failed" });
+    let errorMsg = error.message || "AI Generation Failed";
+    if (errorMsg.includes("429") || errorMsg.toLowerCase().includes("quota")) {
+      errorMsg = "Google Generative AI free-tier quota/rate limit exceeded. Please wait a moment (approx. 30-60 seconds) and try again.";
+    } else if (errorMsg.includes("503")) {
+      errorMsg = "Gemini API service is currently busy or unavailable. Please try again in a moment.";
+    }
+    res.status(500).json({ error: errorMsg });
   }
 });
 
