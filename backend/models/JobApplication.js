@@ -9,7 +9,7 @@ const jobApplicationSchema = new mongoose.Schema({
   salary: { type: String },
   jobUrl: { type: String },
   coverLetter: { type: String },
-  status: { type: String, enum: ['applied', 'failed'], default: 'applied' },
+  status: { type: String, enum: ['applied', 'under review', 'interviewing', 'rejected', 'failed'], default: 'applied' },
   appliedAt: { type: Date, default: Date.now }
 });
 
