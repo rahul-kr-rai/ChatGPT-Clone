@@ -108,6 +108,7 @@ function App() {
   const [appliedStatusFilter, setAppliedStatusFilter] = useState('All');
   const [uploadedResume, setUploadedResume] = useState(null);
   const [showExecutionLog, setShowExecutionLog] = useState(false);
+  const [dashboardMenuOpen, setDashboardMenuOpen] = useState(false);
 
   // Goal 7: Candidate Inbox states
   const [inboxEmails, setInboxEmails] = useState([]);
@@ -212,6 +213,8 @@ function App() {
   useEffect(() => {
     localStorage.setItem('jobHuntMode', jobHuntMode);
     document.body.setAttribute('data-job-hunt', jobHuntMode);
+    setDashboardMenuOpen(false);
+    setIsSidebarOpen(false);
     if (jobHuntMode) {
       setCurrentView('dashboard');
       fetchJobHuntHistory();
@@ -1097,7 +1100,13 @@ function App() {
 
       <nav className="top-navbar">
         {/* --- MOBILE TOGGLE BUTTON --- */}
-        <button className="mobile-menu-btn" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
+        <button className="mobile-menu-btn" onClick={() => {
+          if (currentView === 'chat') {
+            setIsSidebarOpen(!isSidebarOpen);
+          } else {
+            setDashboardMenuOpen(!dashboardMenuOpen);
+          }
+        }}>
           <Menu size={24} />
         </button>
 
@@ -1307,16 +1316,29 @@ function App() {
         </div>
       ) : (
         <div className="job-dashboard-page">
-          <aside className="job-dashboard-sidebar">
+          {/* --- MOBILE OVERLAY --- */}
+          {dashboardMenuOpen && (
+            <div className="mobile-overlay" onClick={() => setDashboardMenuOpen(false)}></div>
+          )}
+
+          <aside className={`job-dashboard-sidebar ${dashboardMenuOpen ? 'open' : ''}`}>
+            {/* --- MOBILE SIDEBAR HEADER --- */}
+            <div className="sidebar-header-mobile">
+              <span className="sidebar-title">Dashboard Menu</span>
+              <button className="close-sidebar-btn" onClick={() => setDashboardMenuOpen(false)}>
+                <X size={20} />
+              </button>
+            </div>
+
             <button
               className={`sidebar-nav-item ${dashboardSidebarTab === 'resume' ? 'active' : ''}`}
-              onClick={() => setDashboardSidebarTab('resume')}
+              onClick={() => { setDashboardSidebarTab('resume'); setDashboardMenuOpen(false); }}
             >
               <FileText size={16} /> Resume & ATS
             </button>
             <button
               className={`sidebar-nav-item ${dashboardSidebarTab === 'inbox' ? 'active' : ''}`}
-              onClick={() => setDashboardSidebarTab('inbox')}
+              onClick={() => { setDashboardSidebarTab('inbox'); setDashboardMenuOpen(false); }}
             >
               <Mail size={16} /> Inbox
               {inboxEmails.filter(e => !e.read).length > 0 && (
@@ -1325,13 +1347,13 @@ function App() {
             </button>
             <button
               className={`sidebar-nav-item ${dashboardSidebarTab === 'applied' ? 'active' : ''}`}
-              onClick={() => setDashboardSidebarTab('applied')}
+              onClick={() => { setDashboardSidebarTab('applied'); setDashboardMenuOpen(false); }}
             >
               <Briefcase size={16} /> Applied Jobs
             </button>
             <button
               className={`sidebar-nav-item ${dashboardSidebarTab === 'analytics' ? 'active' : ''}`}
-              onClick={() => setDashboardSidebarTab('analytics')}
+              onClick={() => { setDashboardSidebarTab('analytics'); setDashboardMenuOpen(false); }}
             >
               <BarChart2 size={16} /> Analytics
             </button>
