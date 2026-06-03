@@ -625,7 +625,7 @@ app.post('/api/resume/auto-apply', apiLimiter, optionalAuth, async (req, res) =>
         company: job.company,
         location: job.location,
         salary: job.salary,
-        jobUrl: job.jobUrl || `https://${job.company.toLowerCase().replace(/[^a-z0-9]/g, '')}.com/careers/apply`,
+        jobUrl: job.jobUrl || `https://www.google.com/search?q=${encodeURIComponent(job.jobTitle + ' ' + job.company + ' jobs')}`,
         coverLetter: coverLetterText,
         status: 'applied'
       });
@@ -769,7 +769,7 @@ app.patch('/api/applications/:id/status', apiLimiter, optionalAuth, async (req, 
     const { status } = req.body;
 
     const validStatuses = ['applied', 'under review', 'interviewing', 'rejected', 'failed'];
-    if (!validStatuses.includes(status)) {
+    if (typeof status !== 'string' || !validStatuses.includes(status)) {
       return res.status(400).json({ error: "Invalid status value" });
     }
 
@@ -780,7 +780,7 @@ app.patch('/api/applications/:id/status', apiLimiter, optionalAuth, async (req, 
 
     const application = await JobApplication.findOneAndUpdate(
       query,
-      { status },
+      { $set: { status } },
       { new: true }
     );
 

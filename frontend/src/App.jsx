@@ -1816,7 +1816,13 @@ function App() {
                           <tbody>
                             {filteredJobs.map((app, i) => {
                               const displayStatus = getDisplayStatus(app);
-                              const originalPostingUrl = app.jobUrl || `https://www.google.com/search?q=${encodeURIComponent(app.jobTitle + ' ' + app.company + ' jobs')}`;
+                              const isSimulatedUrl = !app.jobUrl || 
+                                app.jobUrl.includes('techinnovatorsinc.com') || 
+                                app.jobUrl.includes('globalcoresystems.com') ||
+                                (app.jobUrl.includes('/careers/apply') && !app.jobUrl.includes('google.com'));
+                              const originalPostingUrl = isSimulatedUrl 
+                                ? `https://www.google.com/search?q=${encodeURIComponent(app.jobTitle + ' ' + app.company + ' jobs')}`
+                                : app.jobUrl;
                               return (
                                 <tr key={app._id || i}>
                                   <td className="serial-col"><strong>{i + 1}</strong></td>
