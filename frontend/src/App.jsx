@@ -1816,10 +1816,22 @@ function App() {
                           <tbody>
                             {filteredJobs.map((app, i) => {
                               const displayStatus = getDisplayStatus(app);
-                              const isSimulatedUrl = !app.jobUrl || 
-                                app.jobUrl.includes('techinnovatorsinc.com') || 
-                                app.jobUrl.includes('globalcoresystems.com') ||
-                                (app.jobUrl.includes('/careers/apply') && !app.jobUrl.includes('google.com'));
+                              const isSimulatedUrl = (() => {
+                                if (!app.jobUrl) return true;
+                                try {
+                                  const parsedUrl = new URL(app.jobUrl);
+                                  const hostname = parsedUrl.hostname.toLowerCase();
+                                  const simulatedDomains = ['techinnovatorsinc.com', 'globalcoresystems.com'];
+                                  const isSimulatedDomain = simulatedDomains.some(
+                                    domain => hostname === domain || hostname.endsWith('.' + domain)
+                                  );
+                                  const isGenericCareerPath = parsedUrl.pathname.includes('/careers/apply') && 
+                                    hostname !== 'google.com' && !hostname.endsWith('.google.com');
+                                  return isSimulatedDomain || isGenericCareerPath;
+                                } catch {
+                                  return true; // Invalid URL = treat as simulated
+                                }
+                              })();
                               const originalPostingUrl = isSimulatedUrl 
                                 ? `https://www.google.com/search?q=${encodeURIComponent(app.jobTitle + ' ' + app.company + ' jobs')}`
                                 : app.jobUrl;
