@@ -11,7 +11,7 @@ import {
   Plus, Trash2, X, Sun, Moon, Square, Menu, AlertTriangle, Briefcase,
   MessageSquare, Mail, FileText, RefreshCw, Star, Archive, MoreVertical,
   CornerUpLeft, CornerUpRight, ExternalLink, BarChart2, TrendingUp,
-  Award, Target
+  Award, Target, ArrowLeft
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { GoogleLogin } from '@react-oauth/google';
@@ -108,6 +108,7 @@ function App() {
   const [appliedStatusFilter, setAppliedStatusFilter] = useState('All');
   const [uploadedResume, setUploadedResume] = useState(null);
   const [showExecutionLog, setShowExecutionLog] = useState(false);
+  const [dashboardMenuOpen, setDashboardMenuOpen] = useState(false);
 
   // Goal 7: Candidate Inbox states
   const [inboxEmails, setInboxEmails] = useState([]);
@@ -212,6 +213,8 @@ function App() {
   useEffect(() => {
     localStorage.setItem('jobHuntMode', jobHuntMode);
     document.body.setAttribute('data-job-hunt', jobHuntMode);
+    setDashboardMenuOpen(false);
+    setIsSidebarOpen(false);
     if (jobHuntMode) {
       setCurrentView('dashboard');
       fetchJobHuntHistory();
@@ -1097,7 +1100,13 @@ function App() {
 
       <nav className="top-navbar">
         {/* --- MOBILE TOGGLE BUTTON --- */}
-        <button className="mobile-menu-btn" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
+        <button className="mobile-menu-btn" onClick={() => {
+          if (currentView === 'chat') {
+            setIsSidebarOpen(!isSidebarOpen);
+          } else {
+            setDashboardMenuOpen(!dashboardMenuOpen);
+          }
+        }}>
           <Menu size={24} />
         </button>
 
@@ -1307,16 +1316,29 @@ function App() {
         </div>
       ) : (
         <div className="job-dashboard-page">
-          <aside className="job-dashboard-sidebar">
+          {/* --- MOBILE OVERLAY --- */}
+          {dashboardMenuOpen && (
+            <div className="mobile-overlay" onClick={() => setDashboardMenuOpen(false)}></div>
+          )}
+
+          <aside className={`job-dashboard-sidebar ${dashboardMenuOpen ? 'open' : ''}`}>
+            {/* --- MOBILE SIDEBAR HEADER --- */}
+            <div className="sidebar-header-mobile">
+              <span className="sidebar-title">Dashboard Menu</span>
+              <button className="close-sidebar-btn" onClick={() => setDashboardMenuOpen(false)}>
+                <X size={20} />
+              </button>
+            </div>
+
             <button
               className={`sidebar-nav-item ${dashboardSidebarTab === 'resume' ? 'active' : ''}`}
-              onClick={() => setDashboardSidebarTab('resume')}
+              onClick={() => { setDashboardSidebarTab('resume'); setDashboardMenuOpen(false); }}
             >
               <FileText size={16} /> Resume & ATS
             </button>
             <button
               className={`sidebar-nav-item ${dashboardSidebarTab === 'inbox' ? 'active' : ''}`}
-              onClick={() => setDashboardSidebarTab('inbox')}
+              onClick={() => { setDashboardSidebarTab('inbox'); setDashboardMenuOpen(false); }}
             >
               <Mail size={16} /> Inbox
               {inboxEmails.filter(e => !e.read).length > 0 && (
@@ -1325,13 +1347,13 @@ function App() {
             </button>
             <button
               className={`sidebar-nav-item ${dashboardSidebarTab === 'applied' ? 'active' : ''}`}
-              onClick={() => setDashboardSidebarTab('applied')}
+              onClick={() => { setDashboardSidebarTab('applied'); setDashboardMenuOpen(false); }}
             >
               <Briefcase size={16} /> Applied Jobs
             </button>
             <button
               className={`sidebar-nav-item ${dashboardSidebarTab === 'analytics' ? 'active' : ''}`}
-              onClick={() => setDashboardSidebarTab('analytics')}
+              onClick={() => { setDashboardSidebarTab('analytics'); setDashboardMenuOpen(false); }}
             >
               <BarChart2 size={16} /> Analytics
             </button>
@@ -1626,7 +1648,7 @@ function App() {
             )}
 
             {dashboardSidebarTab === 'inbox' && (
-              <div className="inbox-split-pane gmail-style">
+              <div className={`inbox-split-pane gmail-style ${selectedEmail ? 'view-detail' : 'view-list'}`}>
                 <div className="email-list-side gmail-list-pane">
                   <div className="gmail-toolbar">
                     <input type="checkbox" className="gmail-checkbox-all" checked={inboxEmails.length > 0 && inboxEmails.every(e => e.read)} onChange={() => {
@@ -1686,6 +1708,11 @@ function App() {
                   {selectedEmail ? (
                     <div className="gmail-email-container">
                       <div className="gmail-reader-toolbar">
+                        <button className="gmail-toolbar-btn gmail-back-btn mobile-only" onClick={() => setSelectedEmail(null)} title="Back to Inbox">
+                          <ArrowLeft size={16} />
+                          <span>Back</span>
+                        </button>
+                        <span className="gmail-toolbar-divider mobile-only">|</span>
                         <button className="gmail-toolbar-btn" onClick={() => toggleReadEmail(selectedEmail.id)} title={selectedEmail.read ? "Mark as unread" : "Mark as read"}>
                           <Mail size={16} />
                         </button>
