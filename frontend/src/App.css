@@ -2432,27 +2432,6 @@ span[style*="206,145,120"] {
   }
 }
 
-/* Mobile Responsiveness for Inbox Split-pane */
-@media (max-width: 600px) {
-  .inbox-split-pane.gmail-style {
-    flex-direction: column;
-    height: auto;
-    min-height: 480px;
-  }
-
-  .gmail-list-pane {
-    width: 100%;
-    height: 200px;
-    border-right: none;
-    border-bottom: 1px solid var(--border-gmail);
-  }
-
-  .gmail-reader-pane {
-    width: 100%;
-    height: 320px;
-  }
-}
-
 /* --- Dedicated Job Dashboard Full Page Styles --- */
 .navbar-navigation-tabs {
   display: flex;
@@ -3683,6 +3662,10 @@ span[style*="206,145,120"] {
     opacity: 0;
   }
 }
+/* Mobile only display utility */
+.mobile-only {
+  display: none !important;
+}
 
 /* ==========================================================================
    MOBILE RESPONSIVE — JOB DASHBOARD (≤ 768px)
@@ -3744,26 +3727,42 @@ span[style*="206,145,120"] {
     gap: 16px;
   }
 
-  /* ---- 3. Gmail Inbox → Stacked Layout ---- */
+  /* ---- 3. Gmail Inbox → Mobile List-to-Detail View ---- */
+  .mobile-only {
+    display: inline-flex !important;
+  }
+
   .inbox-split-pane.gmail-style {
-    flex-direction: column;
-    height: auto;
-    min-height: 400px;
-    max-height: calc(100vh - 180px);
+    height: 520px;
   }
 
-  .gmail-list-pane {
+  .inbox-split-pane.gmail-style.view-list .gmail-list-pane {
     width: 100%;
-    height: 200px;
-    min-height: 160px;
+    height: 100%;
+    display: flex;
     border-right: none;
-    border-bottom: 1px solid var(--border-gmail);
+    border-bottom: none;
   }
 
-  .gmail-reader-pane {
+  .inbox-split-pane.gmail-style.view-list .gmail-reader-pane {
+    display: none;
+  }
+
+  .inbox-split-pane.gmail-style.view-detail .gmail-list-pane {
+    display: none;
+  }
+
+  .inbox-split-pane.gmail-style.view-detail .gmail-reader-pane {
     width: 100%;
-    flex: 1;
-    min-height: 240px;
+    height: 100%;
+    display: flex;
+  }
+
+  .gmail-back-btn {
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    color: #f57c00;
   }
 
   .gmail-reader-content {

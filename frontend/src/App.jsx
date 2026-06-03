@@ -11,7 +11,7 @@ import {
   Plus, Trash2, X, Sun, Moon, Square, Menu, AlertTriangle, Briefcase,
   MessageSquare, Mail, FileText, RefreshCw, Star, Archive, MoreVertical,
   CornerUpLeft, CornerUpRight, ExternalLink, BarChart2, TrendingUp,
-  Award, Target
+  Award, Target, ArrowLeft
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { GoogleLogin } from '@react-oauth/google';
@@ -1648,7 +1648,7 @@ function App() {
             )}
 
             {dashboardSidebarTab === 'inbox' && (
-              <div className="inbox-split-pane gmail-style">
+              <div className={`inbox-split-pane gmail-style ${selectedEmail ? 'view-detail' : 'view-list'}`}>
                 <div className="email-list-side gmail-list-pane">
                   <div className="gmail-toolbar">
                     <input type="checkbox" className="gmail-checkbox-all" checked={inboxEmails.length > 0 && inboxEmails.every(e => e.read)} onChange={() => {
@@ -1708,6 +1708,11 @@ function App() {
                   {selectedEmail ? (
                     <div className="gmail-email-container">
                       <div className="gmail-reader-toolbar">
+                        <button className="gmail-toolbar-btn gmail-back-btn mobile-only" onClick={() => setSelectedEmail(null)} title="Back to Inbox">
+                          <ArrowLeft size={16} />
+                          <span>Back</span>
+                        </button>
+                        <span className="gmail-toolbar-divider mobile-only">|</span>
                         <button className="gmail-toolbar-btn" onClick={() => toggleReadEmail(selectedEmail.id)} title={selectedEmail.read ? "Mark as unread" : "Mark as read"}>
                           <Mail size={16} />
                         </button>
