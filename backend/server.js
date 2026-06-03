@@ -11,6 +11,7 @@ const multer = require('multer');
 const nodemailer = require('nodemailer');
 const { OAuth2Client } = require('google-auth-library');
 const rateLimit = require('express-rate-limit');
+const mammoth = require('mammoth');
 
 // --- IMPORTS ---
 const connectDB = require('./db');
@@ -230,7 +231,28 @@ app.post('/api/chat', apiLimiter, optionalAuth, upload.single('file'), async (re
     let promptParts = [];
     if (message) promptParts.push(message);
     if (file) {
-      promptParts.push(fileToGenerativePart(file.buffer, file.mimetype));
+      const isWordDoc = file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+                        file.mimetype === 'application/msword' ||
+                        file.originalname.toLowerCase().endsWith('.docx') ||
+                        file.originalname.toLowerCase().endsWith('.doc');
+
+      const isTxt = file.mimetype === 'text/plain' || file.originalname.toLowerCase().endsWith('.txt');
+
+      if (isWordDoc) {
+        try {
+          const docxResult = await mammoth.extractRawText({ buffer: file.buffer });
+          const docText = docxResult.value;
+          promptParts.push(`[Uploaded Word Document: ${file.originalname}]\nContent:\n${docText}`);
+        } catch (err) {
+          console.error("Error parsing Word document in chat:", err);
+          return res.status(400).json({ error: "Failed to parse Word document." });
+        }
+      } else if (isTxt) {
+        const docText = file.buffer.toString('utf8');
+        promptParts.push(`[Uploaded Text File: ${file.originalname}]\nContent:\n${docText}`);
+      } else {
+        promptParts.push(fileToGenerativePart(file.buffer, file.mimetype));
+      }
     }
 
     if (promptParts.length === 0) {
@@ -315,7 +337,6 @@ app.post('/api/resume/evaluate', apiLimiter, optionalAuth, upload.single('file')
         text: "You are an expert ATS (Applicant Tracking System) auditor. Analyze the uploaded resume and return a structured JSON response matching the requested schema."
       }]
     };
-    const filePart = fileToGenerativePart(file.buffer, file.mimetype);
 
     const prompt = `
       You are an expert ATS (Applicant Tracking System) auditor. Analyze the uploaded resume and return a structured JSON response.
@@ -333,7 +354,39 @@ app.post('/api/resume/evaluate', apiLimiter, optionalAuth, upload.single('file')
       }
     `;
 
-    const result = await generateContentWithFallback([prompt, filePart], systemInstruction);
+    const isWordDoc = file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+                      file.mimetype === 'application/msword' ||
+                      file.originalname.toLowerCase().endsWith('.docx') ||
+                      file.originalname.toLowerCase().endsWith('.doc');
+
+    const isTxt = file.mimetype === 'text/plain' || file.originalname.toLowerCase().endsWith('.txt');
+
+    let promptParts = [prompt];
+
+    if (isWordDoc) {
+      try {
+        const docxResult = await mammoth.extractRawText({ buffer: file.buffer });
+        const resumeText = docxResult.value;
+        if (!resumeText || resumeText.trim() === '') {
+          return res.status(400).json({ error: "Failed to extract text from Word document. The file might be empty or corrupted." });
+        }
+        promptParts.push(`Here is the resume content extracted from the uploaded Word document:\n\n${resumeText}`);
+      } catch (err) {
+        console.error("Error extracting text with mammoth:", err);
+        return res.status(400).json({ error: "Failed to parse Word document. Please ensure it is a valid .docx file." });
+      }
+    } else if (isTxt) {
+      const resumeText = file.buffer.toString('utf8');
+      if (!resumeText || resumeText.trim() === '') {
+        return res.status(400).json({ error: "Uploaded text file is empty." });
+      }
+      promptParts.push(`Here is the resume content from the uploaded text file:\n\n${resumeText}`);
+    } else {
+      const filePart = fileToGenerativePart(file.buffer, file.mimetype);
+      promptParts.push(filePart);
+    }
+
+    const result = await generateContentWithFallback(promptParts, systemInstruction);
     const responseText = result.response.text().trim();
 
     let evaluation;
@@ -572,7 +625,7 @@ app.post('/api/resume/auto-apply', apiLimiter, optionalAuth, async (req, res) =>
         company: job.company,
         location: job.location,
         salary: job.salary,
-        jobUrl: job.jobUrl || `https://${job.company.toLowerCase().replace(/[^a-z0-9]/g, '')}.com/careers/apply`,
+        jobUrl: job.jobUrl || `https://www.google.com/search?q=${encodeURIComponent(job.jobTitle + ' ' + job.company + ' jobs')}`,
         coverLetter: coverLetterText,
         status: 'applied'
       });
@@ -669,6 +722,180 @@ app.get('/api/resume/history', apiLimiter, optionalAuth, async (req, res) => {
   } catch (error) {
     console.error("🔴 Fetch Resume History Error:", error);
     res.status(500).json({ error: error.message || "Failed to retrieve history" });
+  }
+});
+
+app.post('/api/applications', apiLimiter, optionalAuth, async (req, res) => {
+  try {
+    const { jobTitle, company, location, salary, jobUrl, coverLetter, status } = req.body;
+    if (!jobTitle || !company) {
+      return res.status(400).json({ error: "Job title and company are required" });
+    }
+
+    let resumeId;
+    if (req.user) {
+      const latestResume = await Resume.findOne({ userId: req.user.id }).sort({ createdAt: -1 });
+      if (latestResume) {
+        resumeId = latestResume._id;
+      }
+    }
+    if (!resumeId) {
+      resumeId = new mongoose.Types.ObjectId(); // Fallback dummy ID if no resume is found
+    }
+
+    const application = new JobApplication({
+      userId: req.user ? req.user.id : undefined,
+      resumeId,
+      jobTitle,
+      company,
+      location: location || "Remote",
+      salary: salary || "Competitive",
+      jobUrl: jobUrl || "",
+      coverLetter: coverLetter || "",
+      status: status || "applied"
+    });
+
+    await application.save();
+    res.status(201).json({ success: true, application });
+  } catch (error) {
+    console.error("🔴 Add Application Error:", error);
+    res.status(500).json({ error: error.message || "Failed to add application" });
+  }
+});
+
+app.patch('/api/applications/:id/status', apiLimiter, optionalAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const validStatuses = ['applied', 'under review', 'interviewing', 'rejected', 'failed'];
+    if (typeof status !== 'string' || !validStatuses.includes(status)) {
+      return res.status(400).json({ error: "Invalid status value" });
+    }
+
+    const query = { _id: id };
+    if (req.user) {
+      query.userId = req.user.id;
+    }
+
+    const application = await JobApplication.findOneAndUpdate(
+      query,
+      { $set: { status } },
+      { new: true }
+    );
+
+    if (!application) {
+      return res.status(404).json({ error: "Application not found" });
+    }
+
+    res.json({ success: true, application });
+  } catch (error) {
+    console.error("🔴 Update Status Error:", error);
+    res.status(500).json({ error: error.message || "Failed to update status" });
+  }
+});
+
+app.post('/api/applications/parse-email', apiLimiter, optionalAuth, async (req, res) => {
+  try {
+    const { emailText } = req.body;
+    if (!emailText || emailText.trim() === "") {
+      return res.status(400).json({ error: "Email text is required" });
+    }
+
+    if (!genAI) {
+      return res.status(500).json({ error: "AI service unavailable" });
+    }
+
+    const prompt = `
+      You are an expert career assistant and email parser. Analyze the text of the following email received by a job applicant.
+      Identify the company name and determine the outcome or status of the application based on the email content.
+      
+      Classify the outcome into one of these exact statuses:
+      - 'interviewing' (if invited to an interview, schedule a call, screening, or coding test)
+      - 'rejected' (if they chose not to move forward, rejected, or closed the application)
+      - 'under review' (if it's a general update, request for more info, or status inquiry response)
+      - 'applied' (if it's a simple application confirmation)
+
+      Return a valid JSON object ONLY. Do not wrap in markdown (like \`\`\`json) or include any surrounding text.
+      JSON Schema:
+      {
+        "companyName": string (the exact company name extracted, clean and capitalized, e.g. "Google"),
+        "status": string (one of: 'applied', 'under review', 'interviewing', 'rejected')
+      }
+
+      Email content:
+      """
+      ${emailText}
+      """
+    `;
+
+    const systemInstruction = {
+      parts: [{
+        text: "You are an expert ATS email parser. Analyze email content and return JSON matching the schema."
+      }]
+    };
+    const result = await generateContentWithFallback(prompt, systemInstruction);
+    const responseText = result.response.text().trim();
+
+    let parsed;
+    try {
+      const startIndex = responseText.indexOf('{');
+      const endIndex = responseText.lastIndexOf('}');
+      if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+        parsed = JSON.parse(responseText.substring(startIndex, endIndex + 1));
+      } else {
+        parsed = JSON.parse(responseText.replace(/```json/i, '').replace(/```/g, '').trim());
+      }
+    } catch (e) {
+      console.error("Failed to parse JSON from email parser Gemini:", responseText);
+      return res.status(500).json({ error: "AI failed to extract details from email. Please enter manually." });
+    }
+
+    if (!parsed.companyName || !parsed.status) {
+      return res.status(400).json({ error: "Could not identify company name or status from email content." });
+    }
+
+    const query = {};
+    if (req.user) {
+      query.userId = req.user.id;
+    }
+
+    const applications = await JobApplication.find(query);
+    let matchedApp = null;
+    
+    matchedApp = applications.find(app => 
+      app.company.toLowerCase().includes(parsed.companyName.toLowerCase()) ||
+      parsed.companyName.toLowerCase().includes(app.company.toLowerCase())
+    );
+
+    if (!matchedApp) {
+      return res.status(404).json({ 
+        error: `Could not find an application matching company "${parsed.companyName}". Please add the application manually or ensure the company name matches.`,
+        extractedCompany: parsed.companyName,
+        extractedStatus: parsed.status
+      });
+    }
+
+    matchedApp.status = parsed.status;
+    await matchedApp.save();
+
+    res.json({
+      success: true,
+      message: `Successfully matched with "${matchedApp.company}" and updated status to "${parsed.status}".`,
+      application: matchedApp,
+      extractedCompany: parsed.companyName,
+      extractedStatus: parsed.status
+    });
+
+  } catch (error) {
+    console.error("🔴 Parse Email Error:", error);
+    let errorMsg = error.message || "Failed to parse email";
+    if (errorMsg.includes("429") || errorMsg.toLowerCase().includes("quota")) {
+      errorMsg = "Google Generative AI free-tier quota/rate limit exceeded. Please wait a moment (approx. 30-60 seconds) and try again.";
+    } else if (errorMsg.includes("503")) {
+      errorMsg = "Gemini API service is currently busy or unavailable. Please try again in a moment.";
+    }
+    res.status(500).json({ error: errorMsg });
   }
 });
 

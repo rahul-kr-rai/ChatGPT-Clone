@@ -54,8 +54,8 @@ const generateEmailBody = (app) => {
 function App() {
   // --- CONFIGURATION ---
   // PROD: Uses Vercel Env Var. DEV: Uses localhost.
-  const API_BASE = import.meta.env.DEV 
-    ? "http://localhost:10000" 
+  const API_BASE = import.meta.env.DEV
+    ? "http://localhost:10000"
     : (import.meta.env.VITE_API_BASE_URL || "http://localhost:10000");
 
   const [messages, setMessages] = useState([]);
@@ -106,6 +106,8 @@ function App() {
   const [appliedJobs, setAppliedJobs] = useState([]);
   const [appliedSearchQuery, setAppliedSearchQuery] = useState('');
   const [appliedStatusFilter, setAppliedStatusFilter] = useState('All');
+  const [uploadedResume, setUploadedResume] = useState(null);
+  const [showExecutionLog, setShowExecutionLog] = useState(false);
 
   // Goal 7: Candidate Inbox states
   const [inboxEmails, setInboxEmails] = useState([]);
@@ -156,7 +158,7 @@ function App() {
         const data = await res.json();
         if (data.applications) {
           setAppliedJobs(data.applications);
-          
+
           const emails = data.applications.map(app => {
             const domain = app.company.toLowerCase().replace(/[^a-z0-9]/g, '') || 'company';
             return {
@@ -174,6 +176,7 @@ function App() {
         }
         if (data.resumes && data.resumes.length > 0) {
           setAtsScore(data.resumes[0].atsScore);
+          setUploadedResume(data.resumes[0]);
           setAtsSuggestions({
             skills: data.resumes[0].skills,
             missingKeywords: data.resumes[0].missingKeywords,
@@ -436,7 +439,7 @@ function App() {
         headers: headers,
         body: formData
       });
-      
+
       if (!res.ok) {
         let errMsg = "Evaluation server error: status " + res.status;
         try {
@@ -447,7 +450,7 @@ function App() {
         }
         throw new Error(errMsg);
       }
-      
+
       const data = await res.json();
       if (!data.success) {
         throw new Error(data.error || "Failed to analyze resume");
@@ -455,6 +458,7 @@ function App() {
 
       const score = data.resume.atsScore;
       setAtsScore(score);
+      setUploadedResume(data.resume);
       setAtsSuggestions({
         skills: data.resume.skills,
         missingKeywords: data.resume.missingKeywords,
@@ -465,12 +469,15 @@ function App() {
       setAgentLogs(prev => [
         ...prev,
         `📈 [AI Agent] ATS score audit completed. Score: ${score}%`,
-        score >= 70 
-          ? "✅ [AI Agent] ATS Score meets threshold (70%). Initiating autonomous job hunt..."
+        score >= 70
+          ? "✅ [AI Agent] ATS Score meets threshold (70%). Initiating autonomous job hunt in 2 seconds..."
           : "⚠️ [AI Agent] ATS Score is below threshold (70%). Providing targeted recommendations to optimize your resume."
       ]);
 
       if (score >= 70) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        setShowExecutionLog(true);
+
         setAgentLogs(prev => [
           ...prev,
           `🔍 [Job Agent] Searching matching positions for query: "${data.resume.jobSearchQuery}"...`
@@ -484,7 +491,7 @@ function App() {
           },
           body: JSON.stringify({ resumeId: data.resume._id })
         });
-        
+
         if (!applyRes.ok) {
           let errMsg = "Application server error: status " + applyRes.status;
           try {
@@ -495,7 +502,7 @@ function App() {
           }
           throw new Error(errMsg);
         }
-        
+
         const applyData = await applyRes.json();
         if (!applyData.success) {
           throw new Error(applyData.error || "Job application flow failed");
@@ -505,20 +512,132 @@ function App() {
         const freshApps = applyData.applications.filter(app => app.status !== 'skipped');
         const skippedApps = applyData.applications.filter(app => app.status === 'skipped');
 
-        setAgentLogs(prev => [
-          ...prev,
-          `🎯 [Job Agent] Found ${applyData.applications.length} matching job openings ${sourceLabel}.`,
-          ...applyData.applications.flatMap(app => 
-            app.status === 'skipped'
-              ? [`⚠️ [Job Agent] Already applied to "${app.company}". Skipping duplicate submission.`]
-              : [
+        if (freshApps.length === 0) {
+          setAgentLogs([]);
+          Swal.fire({
+            title: 'No Jobs Available',
+            text: 'No jobs available matching your resume.',
+            icon: 'info',
+            confirmButtonColor: '#10a37f',
+            background: theme === 'dark' ? '#232323ff' : '#edededff',
+            color: theme === 'dark' ? '#fff' : '#000'
+          });
+        } else {
+          setAgentLogs(prev => [
+            ...prev,
+            `🎯 [Job Agent] Found ${applyData.applications.length} matching job openings ${sourceLabel}.`,
+            ...applyData.applications.flatMap(app =>
+              app.status === 'skipped'
+                ? [`⚠️ [Job Agent] Already applied to "${app.company}". Skipping duplicate submission.`]
+                : [
                   `📝 [Apply Agent] Custom cover letter generated for "${app.jobTitle}" at "${app.company}".`,
                   `🚀 [Apply Agent] Application submitted successfully to ${app.company}. (Status: APPLIED)`
                 ]
+            ),
+            `🏆 [System] Autonomous job hunt completed. Submitted ${freshApps.length} fresh application(s).`
+          ]);
+
+          setAppliedJobs(prev => [...freshApps, ...prev]);
+
+          const newEmails = freshApps.map(app => {
+            const domain = app.company.toLowerCase().replace(/[^a-z0-9]/g, '') || 'company';
+            return {
+              id: app._id || Math.random().toString(36).substr(2, 9),
+              fromName: `${app.company} Careers`,
+              fromEmail: `careers@${domain}.com`,
+              subject: `Application Confirmation - ${app.jobTitle}`,
+              date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+              body: generateEmailBody(app),
+              coverLetter: app.coverLetter,
+              read: false
+            };
+          });
+          setInboxEmails(prev => [...newEmails, ...prev]);
+        }
+      }
+
+    } catch (err) {
+      console.error(err);
+      setAgentLogs(prev => [...prev, `❌ [Error] Process failed: ${err.message}`]);
+      Swal.fire({
+        title: 'Resume Evaluation Failed',
+        text: err.message || 'Something went wrong during resume evaluation. Please try again.',
+        icon: 'error',
+        confirmButtonColor: '#10a37f',
+        background: theme === 'dark' ? '#232323ff' : '#edededff',
+        color: theme === 'dark' ? '#fff' : '#000'
+      });
+    } finally {
+      setIsAnalyzingResume(false);
+    }
+  };
+
+  const handleApplyMoreJobs = async () => {
+    if (!uploadedResume) return;
+    setDashboardSidebarTab('resume');
+    setIsAnalyzingResume(true);
+    setShowExecutionLog(true);
+    setAgentLogs([
+      "🤖 [System] Re-initiating Autonomous Job Hunt with current resume...",
+      `🔍 [Job Agent] Searching matching positions for query: "${uploadedResume.jobSearchQuery}"...`
+    ]);
+
+    const headers = {};
+    if (user) headers["Authorization"] = `Bearer ${user.token}`;
+
+    try {
+      const applyRes = await fetch(`${API_BASE}/api/resume/auto-apply`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...headers
+        },
+        body: JSON.stringify({ resumeId: uploadedResume._id })
+      });
+
+      if (!applyRes.ok) {
+        let errMsg = "Application server error: status " + applyRes.status;
+        try {
+          const errData = await applyRes.json();
+          if (errData && errData.error) errMsg = errData.error;
+        } catch {
+          // Ignore JSON parsing errors for error status
+        }
+        throw new Error(errMsg);
+      }
+
+      const applyData = await applyRes.json();
+      if (!applyData.success) {
+        throw new Error(applyData.error || "Job application flow failed");
+      }
+
+      const sourceLabel = applyData.apiUsed ? `via ${applyData.apiUsed}` : "via AI Simulation";
+      const freshApps = applyData.applications.filter(app => app.status !== 'skipped');
+      const skippedApps = applyData.applications.filter(app => app.status === 'skipped');
+
+      if (freshApps.length === 0) {
+        setAgentLogs([]);
+        Swal.fire({
+          title: 'No Jobs Available',
+          text: 'No jobs available matching your resume.',
+          icon: 'info',
+          confirmButtonColor: '#10a37f',
+          background: theme === 'dark' ? '#232323ff' : '#edededff',
+          color: theme === 'dark' ? '#fff' : '#000'
+        });
+      } else {
+        setAgentLogs(prev => [
+          ...prev,
+          `🎯 [Job Agent] Found ${applyData.applications.length} matching job openings ${sourceLabel}.`,
+          ...applyData.applications.flatMap(app =>
+            app.status === 'skipped'
+              ? [`⚠️ [Job Agent] Already applied to "${app.company}". Skipping duplicate submission.`]
+              : [
+                `📝 [Apply Agent] Custom cover letter generated for "${app.jobTitle}" at "${app.company}".`,
+                `🚀 [Apply Agent] Application submitted successfully to ${app.company}. (Status: APPLIED)`
+              ]
           ),
-          freshApps.length > 0 
-            ? `🏆 [System] Autonomous job hunt completed. Submitted ${freshApps.length} fresh application(s).`
-            : `🏆 [System] Autonomous job hunt completed. No fresh applications submitted (skipped ${skippedApps.length} duplicates).`
+          `🏆 [System] Autonomous job hunt completed. Submitted ${freshApps.length} fresh application(s).`
         ]);
 
         setAppliedJobs(prev => [...freshApps, ...prev]);
@@ -543,8 +662,8 @@ function App() {
       console.error(err);
       setAgentLogs(prev => [...prev, `❌ [Error] Process failed: ${err.message}`]);
       Swal.fire({
-        title: 'Resume Evaluation Failed',
-        text: err.message || 'Something went wrong during resume evaluation. Please try again.',
+        title: 'Application Flow Failed',
+        text: err.message || 'Something went wrong during job search. Please try again.',
         icon: 'error',
         confirmButtonColor: '#10a37f',
         background: theme === 'dark' ? '#232323ff' : '#edededff',
@@ -724,12 +843,213 @@ function App() {
     }
   };
 
-  const getDisplayStatus = (job, index) => {
-    if (job.status && job.status !== 'applied') {
-      return job.status;
+  const getDisplayStatus = (job) => {
+    return job.status || 'applied';
+  };
+
+  const handleStatusChange = async (id, newStatus) => {
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (user) headers['Authorization'] = `Bearer ${user.token}`;
+
+      const res = await fetch(`${API_BASE}/api/applications/${id}/status`, {
+        method: 'PATCH',
+        headers: headers,
+        body: JSON.stringify({ status: newStatus })
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to update status on server");
+      }
+
+      setAppliedJobs(prev => prev.map(job => job._id === id ? { ...job, status: newStatus } : job));
+
+      Swal.fire({
+        title: 'Status Updated',
+        text: `Application status changed to "${newStatus}"`,
+        icon: 'success',
+        timer: 1500,
+        showConfirmButton: false,
+        background: theme === 'dark' ? '#232323ff' : '#edededff',
+        color: theme === 'dark' ? '#fff' : '#000'
+      });
+    } catch (err) {
+      console.error(err);
+      Swal.fire({
+        title: 'Error',
+        text: err.message || 'Failed to update job status.',
+        icon: 'error',
+        confirmButtonColor: '#10a37f',
+        background: theme === 'dark' ? '#232323ff' : '#edededff',
+        color: theme === 'dark' ? '#fff' : '#000'
+      });
     }
-    const statuses = ['applied', 'under review', 'interviewing', 'rejected'];
-    return statuses[index % statuses.length];
+  };
+
+  const handleAddRealJob = async () => {
+    const bgColor = theme === 'dark' ? '#232323ff' : '#ffffff';
+    const txtColor = theme === 'dark' ? '#f9f9f9' : '#333333';
+
+    const { value: formValues } = await Swal.fire({
+      title: 'Track Real-World Job Application',
+      html:
+        '<input id="swal-company" class="swal2-input" placeholder="Company Name *">' +
+        '<input id="swal-title" class="swal2-input" placeholder="Job Title *">' +
+        '<input id="swal-location" class="swal2-input" placeholder="Location (e.g. Remote, NY)">' +
+        '<input id="swal-salary" class="swal2-input" placeholder="Salary (e.g. $100k - $120k)">' +
+        '<input id="swal-url" class="swal2-input" placeholder="Job Posting URL">' +
+        '<textarea id="swal-cover" class="swal2-textarea" placeholder="Optional Cover Letter" style="height: 100px;"></textarea>' +
+        '<select id="swal-status" class="swal2-select" style="width: 80%; display: flex; margin: 10px auto;">' +
+        '  <option value="applied">Applied</option>' +
+        '  <option value="under review">Under Review</option>' +
+        '  <option value="interviewing">Interviewing</option>' +
+        '  <option value="rejected">Rejected</option>' +
+        '</select>',
+      focusConfirm: false,
+      background: bgColor,
+      color: txtColor,
+      confirmButtonColor: '#10a37f',
+      cancelButtonColor: '#444',
+      showCancelButton: true,
+      confirmButtonText: 'Add to Dashboard',
+      customClass: { popup: 'high-index-swal' },
+      preConfirm: () => {
+        const company = document.getElementById('swal-company').value.trim();
+        const jobTitle = document.getElementById('swal-title').value.trim();
+        if (!company || !jobTitle) {
+          Swal.showValidationMessage('Company Name and Job Title are required');
+          return false;
+        }
+        return {
+          company,
+          jobTitle,
+          location: document.getElementById('swal-location').value.trim(),
+          salary: document.getElementById('swal-salary').value.trim(),
+          jobUrl: document.getElementById('swal-url').value.trim(),
+          coverLetter: document.getElementById('swal-cover').value.trim(),
+          status: document.getElementById('swal-status').value
+        };
+      }
+    });
+
+    if (formValues) {
+      try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (user) headers['Authorization'] = `Bearer ${user.token}`;
+
+        const res = await fetch(`${API_BASE}/api/applications`, {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify(formValues)
+        });
+
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to save application");
+        }
+
+        const data = await res.json();
+        setAppliedJobs(prev => [data.application, ...prev]);
+
+        Swal.fire({
+          title: 'Success!',
+          text: `Now tracking "${formValues.jobTitle}" at "${formValues.company}".`,
+          icon: 'success',
+          confirmButtonColor: '#10a37f',
+          background: bgColor,
+          color: txtColor
+        });
+      } catch (err) {
+        console.error(err);
+        Swal.fire({
+          title: 'Failed to Save',
+          text: err.message || 'Something went wrong.',
+          icon: 'error',
+          confirmButtonColor: '#10a37f',
+          background: bgColor,
+          color: txtColor
+        });
+      }
+    }
+  };
+
+  const handleEmailParse = async () => {
+    const bgColor = theme === 'dark' ? '#232323ff' : '#ffffff';
+    const txtColor = theme === 'dark' ? '#f9f9f9' : '#333333';
+
+    const { value: emailText } = await Swal.fire({
+      title: 'AI Auto-Update from Email Response',
+      text: 'Paste the text of any email response received from a company. The AI will extract the details and update its application status.',
+      input: 'textarea',
+      inputPlaceholder: 'Paste company email text here...',
+      inputAttributes: {
+        'aria-label': 'Paste company email text here',
+        'style': 'height: 150px;'
+      },
+      showCancelButton: true,
+      confirmButtonText: 'Analyze with AI',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#10a37f',
+      cancelButtonColor: '#444',
+      background: bgColor,
+      color: txtColor,
+      customClass: { popup: 'high-index-swal' },
+      inputValidator: (value) => {
+        if (!value || value.trim() === "") {
+          return 'You need to paste some text!';
+        }
+      }
+    });
+
+    if (emailText) {
+      Swal.fire({
+        title: 'AI Parsing Email...',
+        text: 'Analyzing company name and classification...',
+        allowOutsideClick: false,
+        background: bgColor,
+        color: txtColor,
+        didOpen: () => {
+          Swal.showLoading();
+        }
+      });
+
+      try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (user) headers['Authorization'] = `Bearer ${user.token}`;
+
+        const res = await fetch(`${API_BASE}/api/applications/parse-email`, {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify({ emailText })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "Failed to parse email");
+        }
+
+        setAppliedJobs(prev => prev.map(job => job._id === data.application._id ? data.application : job));
+
+        Swal.fire({
+          title: 'Status Updated!',
+          text: data.message,
+          icon: 'success',
+          confirmButtonColor: '#10a37f',
+          background: bgColor,
+          color: txtColor
+        });
+      } catch (err) {
+        console.error(err);
+        Swal.fire({
+          title: 'AI Parsing Failed',
+          text: err.message || 'Something went wrong.',
+          icon: 'error',
+          confirmButtonColor: '#10a37f',
+          background: bgColor,
+          color: txtColor
+        });
+      }
+    }
   };
 
   const renderStatusBadge = (status) => {
@@ -787,9 +1107,9 @@ function App() {
             {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
           </button>
 
-          <div 
-            className={`job-hunt-toggle ${jobHuntMode ? 'active' : ''}`} 
-            onClick={handleToggleJobHuntMode} 
+          <div
+            className={`job-hunt-toggle ${jobHuntMode ? 'active' : ''}`}
+            onClick={handleToggleJobHuntMode}
             title="Toggle Job-Hunt Mode"
           >
             <Briefcase size={16} />
@@ -814,187 +1134,187 @@ function App() {
 
       {currentView === 'chat' ? (
         <div className="body-container">
-        {/* --- MOBILE OVERLAY --- */}
-        {isSidebarOpen && (
-          <div className="mobile-overlay" onClick={() => setIsSidebarOpen(false)}></div>
-        )}
+          {/* --- MOBILE OVERLAY --- */}
+          {isSidebarOpen && (
+            <div className="mobile-overlay" onClick={() => setIsSidebarOpen(false)}></div>
+          )}
 
-        {/* --- SIDEBAR --- */}
-        <aside className={`chat-sidebar ${isSidebarOpen ? 'open' : ''}`}>
-          {/* --- MOBILE SIDEBAR HEADER WITH TITLE --- */}
-          <div className="sidebar-header-mobile">
-            <span className="sidebar-title">Chat History</span>
-            <button className="close-sidebar-btn" onClick={() => setIsSidebarOpen(false)}>
-              <X size={20} />
+          {/* --- SIDEBAR --- */}
+          <aside className={`chat-sidebar ${isSidebarOpen ? 'open' : ''}`}>
+            {/* --- MOBILE SIDEBAR HEADER WITH TITLE --- */}
+            <div className="sidebar-header-mobile">
+              <span className="sidebar-title">Chat History</span>
+              <button className="close-sidebar-btn" onClick={() => setIsSidebarOpen(false)}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <button className="new-chat-btn" onClick={handleNewChat}>
+              <Plus size={16} /> New Chat
             </button>
-          </div>
+            <div className="conv-history">
+              {user ? conversations.map(c => (
+                <div
+                  key={c._id}
+                  className={`history-item ${activeConvId === c._id ? 'active' : ''}`}
+                  onClick={() => setActiveConvId(c._id)}
+                >
+                  <span className="conv-title">{c.title}</span>
+                  <button className="delete-btn" onClick={(e) => handleDeleteConversation(e, c._id)}>
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              )) : <div className="guest-label">Log in to save Chat history</div>}
+            </div>
+          </aside>
 
-          <button className="new-chat-btn" onClick={handleNewChat}>
-            <Plus size={16} /> New Chat
-          </button>
-          <div className="conv-history">
-            {user ? conversations.map(c => (
-              <div
-                key={c._id}
-                className={`history-item ${activeConvId === c._id ? 'active' : ''}`}
-                onClick={() => setActiveConvId(c._id)}
-              >
-                <span className="conv-title">{c.title}</span>
-                <button className="delete-btn" onClick={(e) => handleDeleteConversation(e, c._id)}>
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            )) : <div className="guest-label">Log in to save Chat history</div>}
-          </div>
-        </aside>
+          <main className="chat-view">
+            <div className="scrollable-messages">
+              {messages.length === 0 ? (
+                <div className="hero-landing"><h1>How can I help you?</h1></div>
+              ) : (
+                <>
+                  {messages.map((msg, i) => (
+                    <div key={i} className={`msg-row ${msg.role}`}>
+                      <div className="msg-wrapper">
+                        <div className="text-box">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              code({ inline, className, children, ...props }) {
+                                const match = /language-(\w+)/.exec(className || '');
+                                const codeContent = String(children).replace(/\n$/, '');
 
-        <main className="chat-view">
-          <div className="scrollable-messages">
-            {messages.length === 0 ? (
-              <div className="hero-landing"><h1>How can I help you?</h1></div>
-            ) : (
-              <>
-                {messages.map((msg, i) => (
-                  <div key={i} className={`msg-row ${msg.role}`}>
-                    <div className="msg-wrapper">
-                      <div className="text-box">
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          components={{
-                            code({ inline, className, children, ...props }) {
-                              const match = /language-(\w+)/.exec(className || '');
-                              const codeContent = String(children).replace(/\n$/, '');
-
-                              return !inline && match ? (
-                                <CodeBlock language={match[1]} value={codeContent} />
-                              ) : (
-                                <code className={className} {...props}>
-                                  {children}
-                                </code>
-                              );
-                            }
-                          }}
-                        >
-                          {msg.text}
-                        </ReactMarkdown>
+                                return !inline && match ? (
+                                  <CodeBlock language={match[1]} value={codeContent} />
+                                ) : (
+                                  <code className={className} {...props}>
+                                    {children}
+                                  </code>
+                                );
+                              }
+                            }}
+                          >
+                            {msg.text}
+                          </ReactMarkdown>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-                {isLoading && (
-                  <div className="msg-row bot">
-                    <div className="msg-wrapper">
-                      <div className="text-box thinking-text">AI ChatBot is thinking...</div>
+                  ))}
+                  {isLoading && (
+                    <div className="msg-row bot">
+                      <div className="msg-wrapper">
+                        <div className="text-box thinking-text">AI ChatBot is thinking...</div>
+                      </div>
                     </div>
+                  )}
+                </>
+              )}
+              <div ref={chatEndRef} />
+            </div>
+
+            <div className="input-fixed-bottom">
+              <div className="input-pill-container">
+                {selectedFile && (
+                  <div className="file-preview-pill">
+                    <span className="file-name">{selectedFile.name}</span>
+                    <button onClick={clearFile} className="remove-file-btn"><X size={14} /></button>
                   </div>
                 )}
-              </>
-            )}
-            <div ref={chatEndRef} />
-          </div>
 
-          <div className="input-fixed-bottom">
-            <div className="input-pill-container">
-              {selectedFile && (
-                <div className="file-preview-pill">
-                  <span className="file-name">{selectedFile.name}</span>
-                  <button onClick={clearFile} className="remove-file-btn"><X size={14} /></button>
-                </div>
-              )}
-
-              {/* --- POPOVER MENU --- */}
-              {showAttachMenu && (
-                <div className="attach-menu-popover" ref={menuRef}>
-                  {jobHuntMode && (
-                    <button className="menu-item ats-option" onClick={() => { setCurrentView('dashboard'); setDashboardSidebarTab('resume'); setShowAttachMenu(false); }}>
-                      <Briefcase size={18} style={{ color: '#f57c00' }} /> <span style={{ color: '#f57c00', fontWeight: 'bold' }}>ATS Auto-Apply</span>
+                {/* --- POPOVER MENU --- */}
+                {showAttachMenu && (
+                  <div className="attach-menu-popover" ref={menuRef}>
+                    {jobHuntMode && (
+                      <button className="menu-item ats-option" onClick={() => { setCurrentView('dashboard'); setDashboardSidebarTab('resume'); setShowAttachMenu(false); }}>
+                        <Briefcase size={18} style={{ color: '#f57c00' }} /> <span style={{ color: '#f57c00', fontWeight: 'bold' }}>ATS Auto-Apply</span>
+                      </button>
+                    )}
+                    <button className="menu-item" onClick={() => { fileInputRef.current.click(); setShowAttachMenu(false); }}>
+                      <Paperclip size={18} /> Upload File
                     </button>
-                  )}
-                  <button className="menu-item" onClick={() => { fileInputRef.current.click(); setShowAttachMenu(false); }}>
-                    <Paperclip size={18} /> Upload File
-                  </button>
-                  <button className="menu-item" onClick={() => setShowAttachMenu(false)}>
-                    <Search size={18} /> Search
-                  </button>
-                  <button className="menu-item" onClick={() => setShowAttachMenu(false)}>
-                    <GraduationCap size={18} /> Study
-                  </button>
-                  <button className="menu-item" onClick={() => setShowAttachMenu(false)}>
-                    <ImageIcon size={18} /> Create Image
-                  </button>
-                </div>
-              )}
+                    <button className="menu-item" onClick={() => setShowAttachMenu(false)}>
+                      <Search size={18} /> Search
+                    </button>
+                    <button className="menu-item" onClick={() => setShowAttachMenu(false)}>
+                      <GraduationCap size={18} /> Study
+                    </button>
+                    <button className="menu-item" onClick={() => setShowAttachMenu(false)}>
+                      <ImageIcon size={18} /> Create Image
+                    </button>
+                  </div>
+                )}
 
-              <form onSubmit={handleSendMessage} className="pill-form">
-                <button
-                  type="button"
-                  className={`attach-toggle-btn ${showAttachMenu ? 'active' : ''}`}
-                  onClick={() => setShowAttachMenu(!showAttachMenu)}
-                  ref={btnRef}
-                >
-                  <Plus
-                    size={24}
-                    style={{
-                      transform: showAttachMenu ? 'rotate(45deg)' : 'none',
-                      transition: '0.2s'
-                    }}
-                  />
-                </button>
-
-                <textarea
-                  ref={textAreaRef}
-                  value={input}
-                  onChange={(e) => {
-                    setInput(e.target.value);
-                    e.target.style.height = 'auto';
-                    e.target.style.height = `${e.target.scrollHeight}px`;
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage(e);
-                    }
-                  }}
-                  placeholder={selectedFile ? "Add a caption..." : (isListening ? "Listening..." : "Ask anything")}
-                  rows="1"
-                  onClick={() => setShowAttachMenu(false)}
-                />
-
-                <div className="input-tools">
-                  <span
-                    className={`mic-tool ${isListening ? 'active-mic' : ''}`}
-                    onClick={handleMicClick}
-                    title={isListening ? "Stop listening" : "Start voice input"}
+                <form onSubmit={handleSendMessage} className="pill-form">
+                  <button
+                    type="button"
+                    className={`attach-toggle-btn ${showAttachMenu ? 'active' : ''}`}
+                    onClick={() => setShowAttachMenu(!showAttachMenu)}
+                    ref={btnRef}
                   >
-                    <Mic size={18} />
-                  </span>
+                    <Plus
+                      size={24}
+                      style={{
+                        transform: showAttachMenu ? 'rotate(45deg)' : 'none',
+                        transition: '0.2s'
+                      }}
+                    />
+                  </button>
 
-                  {isLoading ? (
-                    <button type="button" className="send-tool stop-tool" onClick={handleStopGeneration} title="Stop generation">
-                      <Square size={14} fill="currentColor" />
-                    </button>
-                  ) : (
-                    <button type="submit" className="send-tool" disabled={(!input.trim() && !selectedFile)}>
-                      <IoSend size={18} />
-                    </button>
-                  )}
-                </div>
-              </form>
+                  <textarea
+                    ref={textAreaRef}
+                    value={input}
+                    onChange={(e) => {
+                      setInput(e.target.value);
+                      e.target.style.height = 'auto';
+                      e.target.style.height = `${e.target.scrollHeight}px`;
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage(e);
+                      }
+                    }}
+                    placeholder={selectedFile ? "Add a caption..." : (isListening ? "Listening..." : "Ask anything")}
+                    rows="1"
+                    onClick={() => setShowAttachMenu(false)}
+                  />
+
+                  <div className="input-tools">
+                    <span
+                      className={`mic-tool ${isListening ? 'active-mic' : ''}`}
+                      onClick={handleMicClick}
+                      title={isListening ? "Stop listening" : "Start voice input"}
+                    >
+                      <Mic size={18} />
+                    </span>
+
+                    {isLoading ? (
+                      <button type="button" className="send-tool stop-tool" onClick={handleStopGeneration} title="Stop generation">
+                        <Square size={14} fill="currentColor" />
+                      </button>
+                    ) : (
+                      <button type="submit" className="send-tool" disabled={(!input.trim() && !selectedFile)}>
+                        <IoSend size={18} />
+                      </button>
+                    )}
+                  </div>
+                </form>
+              </div>
+              <p className="privacy-disclaimer"> Made by <a href="https://github.com/rahul-kr-rai" target="_blank" rel="noopener noreferrer">Rahul Kumar Rai</a> ❤️ &copy; 2025</p>
             </div>
-            <p className="privacy-disclaimer"> Made by <a href="https://github.com/rahul-kr-rai" target="_blank" rel="noopener noreferrer">Rahul Kumar Rai</a> ❤️ &copy; 2025</p>
-          </div>
-        </main>
-      </div>
+          </main>
+        </div>
       ) : (
         <div className="job-dashboard-page">
           <aside className="job-dashboard-sidebar">
-            <button 
+            <button
               className={`sidebar-nav-item ${dashboardSidebarTab === 'resume' ? 'active' : ''}`}
               onClick={() => setDashboardSidebarTab('resume')}
             >
               <FileText size={16} /> Resume & ATS
             </button>
-            <button 
+            <button
               className={`sidebar-nav-item ${dashboardSidebarTab === 'inbox' ? 'active' : ''}`}
               onClick={() => setDashboardSidebarTab('inbox')}
             >
@@ -1003,13 +1323,13 @@ function App() {
                 <span className="inbox-badge">{inboxEmails.filter(e => !e.read).length}</span>
               )}
             </button>
-            <button 
+            <button
               className={`sidebar-nav-item ${dashboardSidebarTab === 'applied' ? 'active' : ''}`}
               onClick={() => setDashboardSidebarTab('applied')}
             >
               <Briefcase size={16} /> Applied Jobs
             </button>
-            <button 
+            <button
               className={`sidebar-nav-item ${dashboardSidebarTab === 'analytics' ? 'active' : ''}`}
               onClick={() => setDashboardSidebarTab('analytics')}
             >
@@ -1020,79 +1340,249 @@ function App() {
           <main className="job-dashboard-main-content">
             {dashboardSidebarTab === 'resume' && (
               <div className="resume-workflow-container">
-                {/* Stage 1: Upload & Evaluation (atsScore === null OR atsScore < 80) */}
-                {(atsScore === null || atsScore < 80) && (
+                {/* 1. Dropzone Screen */}
+                {atsScore === null && !isAnalyzingResume && (
                   <div className="resume-upload-evaluation-stage">
-                    {/* Upload Dropzone */}
-                    {atsScore === null && (
-                      <>
-                        <div className={`resume-dropzone ${isAnalyzingResume ? 'analyzing' : ''}`}>
-                          <input 
-                            type="file" 
-                            id="resume-file-input"
-                            accept=".pdf,.txt,.doc,.docx"
-                            style={{ display: 'none' }}
-                            disabled={isAnalyzingResume}
-                            onChange={(e) => {
-                              if (e.target.files && e.target.files[0]) {
-                                handleResumeUpload(e.target.files[0]);
-                              }
-                            }}
-                          />
-                          <label htmlFor="resume-file-input" className="dropzone-label">
-                            <Paperclip size={32} />
-                            <span>{isAnalyzingResume ? "Analyzing Resume..." : "Drag & Drop Resume or Click to Upload"}</span>
-                            <small>Supports PDF, DOCX, TXT (Max 5MB)</small>
-                          </label>
-                        </div>
-                        
-                        {!isAnalyzingResume && (
-                          <div className="resume-motivational-illustration">
-                            <div className="pulse-network">
-                              <div className="pulse-circle c1"></div>
-                              <div className="pulse-circle c2"></div>
-                              <div className="pulse-circle c3"></div>
-                              <div className="center-node">
-                                <Briefcase size={24} style={{ color: '#f57c00' }} />
-                              </div>
-                            </div>
-                            <h3>Autonomous Job Applying Agent</h3>
-                            <p>Upload your resume to evaluate your ATS score. Our agent will automatically search matching job boards, write tailored cover letters, and submit applications on your behalf.</p>
-                            <div className="feature-badges">
-                              <span className="badge">✓ Real-time Live Jobs</span>
-                              <span className="badge">✓ Custom Cover Letters</span>
-                              <span className="badge">✓ Anti-Duplicate Check</span>
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    )}
+                    <div className="resume-dropzone">
+                      <input
+                        type="file"
+                        id="resume-file-input"
+                        accept=".pdf,.txt,.doc,.docx"
+                        style={{ display: 'none' }}
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            handleResumeUpload(e.target.files[0]);
+                          }
+                        }}
+                      />
+                      <label htmlFor="resume-file-input" className="dropzone-label">
+                        <Paperclip size={32} />
+                        <span>Drag & Drop Resume or Click to Upload</span>
+                        <small>Supports PDF, DOCX, TXT (Max 5MB)</small>
+                      </label>
+                    </div>
 
-                    {/* ATS Score & Suggestions (If score < 70) */}
-                    {atsScore !== null && atsScore < 70 && (
-                      <div className="ats-results-box">
-                        <div className="ats-results-header">
-                          <div className="gauge-container">
-                            <div className={`ats-gauge ${atsScore >= 70 ? 'pass' : 'fail'}`} style={{ '--score-percentage': `${atsScore}` }}>
-                              <div className="gauge-inner">
-                                <span className="gauge-value">{atsScore}%</span>
-                                <span className="gauge-label">ATS Score</span>
-                              </div>
+                    <div className="resume-motivational-illustration">
+                      <div className="pulse-network">
+                        <div className="pulse-circle c1"></div>
+                        <div className="pulse-circle c2"></div>
+                        <div className="pulse-circle c3"></div>
+                        <div className="center-node">
+                          <Briefcase size={24} style={{ color: '#f57c00' }} />
+                        </div>
+                      </div>
+                      <h3>Autonomous Job Applying Agent</h3>
+                      <p>Upload your resume to evaluate your ATS score. Our agent will automatically search matching job boards, write tailored cover letters, and submit applications on your behalf.</p>
+                      <div className="feature-badges">
+                        <span className="badge">✓ Real-time Live Jobs</span>
+                        <span className="badge">✓ Custom Cover Letters</span>
+                        <span className="badge">✓ Anti-Duplicate Check</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. Progress Spinner */}
+                {atsScore === null && isAnalyzingResume && (
+                  <div className="resume-upload-evaluation-stage">
+                    <div className="ats-analyzing-progress">
+                      <div className="progress-spinner"></div>
+                      <div className="progress-text">Evaluator is scanning text, checking keywords, and calculating ATS score...</div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 3. ATS Score Check (2-second delay only, score >= 70, no buttons or extra UI) */}
+                {atsScore !== null && atsScore >= 70 && isAnalyzingResume && !showExecutionLog && (
+                  <div className="resume-upload-evaluation-stage" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '350px' }}>
+                    <div className="ats-results-box" style={{ border: 'none', background: 'transparent', boxShadow: 'none', display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%' }}>
+                      <div className="gauge-container">
+                        <div className="ats-gauge pass" style={{ '--score-percentage': `${atsScore}`, width: '130px', height: '130px' }}>
+                          <div className="gauge-inner" style={{ width: '114px', height: '114px' }}>
+                            <span className="gauge-value" style={{ fontSize: '28px' }}>{atsScore}%</span>
+                            <span className="gauge-label">ATS Score</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 4. Execution Log (Terminal showing active logs) */}
+                {atsScore !== null && showExecutionLog && isAnalyzingResume && (
+                  <div className="agent-terminal-full">
+                    <div className="terminal-header">
+                      <div className="terminal-dots">
+                        <span className="terminal-dot red"></span>
+                        <span className="terminal-dot yellow"></span>
+                        <span className="terminal-dot green"></span>
+                      </div>
+                      <span className="terminal-title">Agent Execution Log</span>
+                      <span className="terminal-status-badge">ACTIVE</span>
+                    </div>
+                    <div className="terminal-content">
+                      {agentLogs.length === 0 ? (
+                        <div className="terminal-empty">No execution logs yet. Upload your resume to start.</div>
+                      ) : (
+                        agentLogs.map((log, i) => (
+                          <div key={i} className="terminal-line">{log}</div>
+                        ))
+                      )}
+                      <div className="terminal-line pulse-line">█ Agent is processing...</div>
+                      <div ref={terminalEndRef} />
+                    </div>
+                  </div>
+                )}
+
+                {/* 5. Execution Completed: Show ATS Score centered with 2 buttons beneath */}
+                {atsScore !== null && atsScore >= 70 && !isAnalyzingResume && (
+                  <div className="resume-upload-evaluation-stage execution-completed-stage" style={{ width: '100%' }}>
+                    <div className="resume-completed-layout" style={{ display: 'flex', gap: '30px', width: '100%', alignItems: 'stretch', flexWrap: 'wrap' }}>
+
+                      {/* Left Panel: Score and Actions */}
+                      <div className="completed-left-card" style={{ flex: 1, minWidth: '300px', backgroundColor: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '30px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '24px' }}>
+                        <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: 'var(--text-main)', textAlign: 'center' }}>Agent Analysis & Automation</h3>
+                        <div className="gauge-container">
+                          <div className="ats-gauge pass" style={{ '--score-percentage': `${atsScore}`, width: '130px', height: '130px' }}>
+                            <div className="gauge-inner" style={{ width: '114px', height: '114px' }}>
+                              <span className="gauge-value" style={{ fontSize: '28px' }}>{atsScore}%</span>
+                              <span className="gauge-label" style={{ fontSize: '10px' }}>ATS Score</span>
                             </div>
                           </div>
-                          <button 
-                            className="restart-btn"
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#10a37f', fontSize: '13px', fontWeight: 500, backgroundColor: 'rgba(16, 163, 127, 0.08)', padding: '6px 12px', borderRadius: '20px' }}>
+                          <Check size={16} /> Autonomous Run Completed
+                        </div>
+                        <div className="gauge-action-buttons" style={{ display: 'flex', gap: '12px', justifyContent: 'center', width: '100%', marginTop: '10px' }}>
+                          {uploadedResume && (
+                            <button
+                              className="apply-more-jobs-btn"
+                              onClick={handleApplyMoreJobs}
+                              disabled={isAnalyzingResume}
+                              style={{ margin: 0, flex: 1, justifyContent: 'center' }}
+                            >
+                              <Search size={16} /> Apply More Jobs
+                            </button>
+                          )}
+                          <button
+                            className="apply-new-resume-btn"
                             onClick={() => {
                               setAtsScore(null);
                               setAtsSuggestions(null);
                               setAgentLogs([]);
                               setSelectedFile(null);
+                              setShowExecutionLog(false);
+                              setUploadedResume(null);
                             }}
+                            style={{ flex: 1, justifyContent: 'center' }}
                           >
-                            <RefreshCw size={14} /> Try Another Resume
+                            <RefreshCw size={16} /> Upload New Resume
                           </button>
                         </div>
-                        
+                      </div>
+
+                      {/* Right Panel: Parsed Profile Metadata */}
+                      <div className="completed-right-card" style={{ flex: 1.2, minWidth: '300px', backgroundColor: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '30px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                        <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <Briefcase size={20} style={{ color: '#10a37f' }} /> Parsed Candidate Profile
+                        </h3>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          <span style={{ fontSize: '12px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Active Document</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', backgroundColor: 'rgba(255, 255, 255, 0.03)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                            <FileText size={16} style={{ color: '#f57c00' }} />
+                            <span style={{ fontSize: '14px', color: 'var(--text-main)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {uploadedResume?.fileName || "resume.pdf"}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          <span style={{ fontSize: '12px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Optimized Search Query</span>
+                          <div style={{ fontSize: '14px', color: 'var(--text-main)', fontWeight: 500, padding: '10px 14px', backgroundColor: 'rgba(255, 255, 255, 0.03)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                            "{uploadedResume?.jobSearchQuery || 'Software Engineer'}"
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <span style={{ fontSize: '12px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Detected Skills</span>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', maxHeight: '120px', overflowY: 'auto', paddingRight: '4px' }}>
+                            {uploadedResume?.skills && uploadedResume.skills.length > 0 ? (
+                              uploadedResume.skills.map((skill, index) => (
+                                <span key={index} style={{ fontSize: '12px', backgroundColor: 'rgba(16, 163, 127, 0.1)', color: '#10a37f', padding: '4px 10px', borderRadius: '15px', fontWeight: 500 }}>
+                                  {skill}
+                                </span>
+                              ))
+                            ) : (
+                              <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>No skills parsed.</span>
+                            )}
+                          </div>
+                        </div>
+                    </div>
+                  </div>
+
+                    {/* Status Monitoring Footer Bar */}
+                    <div style={{ 
+                      width: '100%', 
+                      marginTop: '25px', 
+                      padding: '16px 20px', 
+                      backgroundColor: 'rgba(255, 255, 255, 0.02)', 
+                      border: '1px solid var(--border-color)', 
+                      borderRadius: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '15px',
+                      flexWrap: 'wrap'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span className="status-pulse-dot" style={{ display: 'inline-block' }}></span>
+                        <span style={{ fontSize: '13px', color: 'var(--text-main)', fontWeight: 500, letterSpacing: '0.2px' }}>
+                          Agent Status: <strong style={{ color: '#10a37f' }}>Active Standby & Inbox Monitoring</strong>
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+                        <span style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#f57c00' }}></span> Adzuna API Status: Online
+                        </span>
+                        <span style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10a37f' }}></span> Gemini API Status: Online
+                        </span>
+                      </div>
+                    </div>
+
+                  </div>
+                )}
+
+                {/* 6. ATS Score below 70 (Evaluation Failed / Optimizations) */}
+                {atsScore !== null && atsScore < 70 && !isAnalyzingResume && (
+                  <div className="resume-upload-evaluation-stage">
+                    <div className="ats-results-box">
+                      <div className="ats-results-header">
+                        <div className="gauge-container">
+                          <div className="ats-gauge fail" style={{ '--score-percentage': `${atsScore}` }}>
+                            <div className="gauge-inner">
+                              <span className="gauge-value">{atsScore}%</span>
+                              <span className="gauge-label">ATS Score</span>
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          className="restart-btn"
+                          onClick={() => {
+                            setAtsScore(null);
+                            setAtsSuggestions(null);
+                            setAgentLogs([]);
+                            setSelectedFile(null);
+                            setShowExecutionLog(false);
+                            setUploadedResume(null);
+                          }}
+                        >
+                          <RefreshCw size={14} /> Try Another Resume
+                        </button>
+                      </div>
+
+                      {atsSuggestions && (
                         <div className="suggestions-list">
                           <h3>Optimization Suggestions</h3>
                           {atsSuggestions.missingKeywords && atsSuggestions.missingKeywords.length > 0 && (
@@ -1105,7 +1595,7 @@ function App() {
                               </div>
                             </div>
                           )}
-                          
+
                           {atsSuggestions.contentSuggestions && atsSuggestions.contentSuggestions.length > 0 && (
                             <div className="suggestion-section">
                               <h4>Content Improvements</h4>
@@ -1116,7 +1606,7 @@ function App() {
                               </ul>
                             </div>
                           )}
-                          
+
                           {atsSuggestions.formattingSuggestions && atsSuggestions.formattingSuggestions.length > 0 && (
                             <div className="suggestion-section">
                               <h4>Layout & Formatting</h4>
@@ -1128,59 +1618,8 @@ function App() {
                             </div>
                           )}
                         </div>
-                      </div>
-                    )}
-
-                    {/* While ATS check is running, show a progress log or status */}
-                    {isAnalyzingResume && (
-                      <div className="ats-analyzing-progress">
-                        <div className="progress-spinner"></div>
-                        <div className="progress-text">Evaluator is scanning text, checking keywords, and calculating ATS score...</div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Stage 2: Agent Execution Log (atsScore >= 70) */}
-                {atsScore !== null && atsScore >= 70 && (
-                  <div className="agent-terminal-full">
-                    <div className="terminal-header">
-                      <div className="terminal-dots">
-                        <span className="terminal-dot red"></span>
-                        <span className="terminal-dot yellow"></span>
-                        <span className="terminal-dot green"></span>
-                      </div>
-                      <span className="terminal-title">Agent Execution Log</span>
-                      <span className="terminal-status-badge">{isAnalyzingResume ? "ACTIVE" : "COMPLETED"}</span>
-                    </div>
-                    <div className="terminal-content">
-                      {agentLogs.length === 0 ? (
-                        <div className="terminal-empty">No execution logs yet. Upload your resume to start.</div>
-                      ) : (
-                        agentLogs.map((log, i) => (
-                          <div key={i} className="terminal-line">{log}</div>
-                        ))
                       )}
-                      {isAnalyzingResume && <div className="terminal-line pulse-line">█ Agent is processing...</div>}
-                      <div ref={terminalEndRef} />
                     </div>
-
-                    {/* Stage 3: Process End Stage button */}
-                    {!isAnalyzingResume && (
-                      <div className="terminal-action-area">
-                        <button 
-                          className="apply-new-resume-btn"
-                          onClick={() => {
-                            setAtsScore(null);
-                            setAtsSuggestions(null);
-                            setAgentLogs([]);
-                            setSelectedFile(null);
-                          }}
-                        >
-                          <RefreshCw size={16} /> Apply with New Resume
-                        </button>
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
@@ -1208,8 +1647,8 @@ function App() {
                       {inboxEmails.map((email) => {
                         const emailSnippet = "We have received your job application and are checking your profile details...";
                         return (
-                          <div 
-                            key={email.id} 
+                          <div
+                            key={email.id}
                             className={`gmail-email-item ${email.read ? 'read' : 'unread'} ${selectedEmail?.id === email.id ? 'selected' : ''}`}
                             onClick={() => {
                               setSelectedEmail(email);
@@ -1217,8 +1656,8 @@ function App() {
                             }}
                           >
                             <div className="gmail-item-left-controls">
-                              <span 
-                                className={`gmail-star-icon ${email.starred ? 'starred' : ''}`} 
+                              <span
+                                className={`gmail-star-icon ${email.starred ? 'starred' : ''}`}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   toggleStarEmail(email.id);
@@ -1264,10 +1703,10 @@ function App() {
                           <MoreVertical size={16} />
                         </button>
                       </div>
-                      
+
                       <div className="gmail-reader-content">
                         <h1 className="gmail-reader-subject">{selectedEmail.subject}</h1>
-                        
+
                         <div className="gmail-reader-sender-row">
                           <div className="gmail-avatar">
                             {selectedEmail.fromName[0].toUpperCase()}
@@ -1286,9 +1725,9 @@ function App() {
                           </div>
                         </div>
 
-                        <div 
-                          className="gmail-email-body-content" 
-                          dangerouslySetInnerHTML={{ __html: selectedEmail.body }} 
+                        <div
+                          className="gmail-email-body-content"
+                          dangerouslySetInnerHTML={{ __html: selectedEmail.body }}
                         />
 
                         <div className="gmail-reply-box">
@@ -1310,38 +1749,51 @@ function App() {
 
             {dashboardSidebarTab === 'applied' && (
               <div className="applied-jobs-box">
-                <h3>Autonomously Applied Positions</h3>
+                <div className="dashboard-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '16px', flexWrap: 'wrap' }}>
+                  <h3 style={{ margin: 0 }}>AI Personal ATS Tracker</h3>
+                  <div className="dashboard-header-actions" style={{ display: 'flex', gap: '10px' }}>
+                    <button onClick={handleAddRealJob} className="apply-new-resume-btn" style={{ padding: '8px 16px', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      <Plus size={14} /> Add Real Job
+                    </button>
+                    <button onClick={handleEmailParse} className="job-external-link-btn" style={{ padding: '8px 16px', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      <RefreshCw size={14} /> AI Email Update
+                    </button>
+                  </div>
+                </div>
+
+                <div className="table-controls-bar">
+                  <div className="search-wrapper">
+                    <Search size={16} className="search-icon" />
+                    <input
+                      type="text"
+                      placeholder="Search by job title or company..."
+                      value={appliedSearchQuery}
+                      onChange={(e) => setAppliedSearchQuery(e.target.value)}
+                      className="table-search-input"
+                    />
+                  </div>
+                  <div className="filter-wrapper">
+                    <span className="filter-label">Status:</span>
+                    <select
+                      value={appliedStatusFilter}
+                      onChange={(e) => setAppliedStatusFilter(e.target.value)}
+                      className="table-filter-select"
+                    >
+                      <option value="All">All Statuses</option>
+                      <option value="Applied">Applied</option>
+                      <option value="Under Review">Under Review</option>
+                      <option value="Interviewing">Interviewing</option>
+                      <option value="Rejected">Rejected</option>
+                    </select>
+                  </div>
+                </div>
+
                 {appliedJobs.length === 0 ? (
-                  <div className="applied-empty-state">No applied positions yet. Upload a matching resume (Score &ge; 80) to apply.</div>
+                  <div className="applied-empty-state" style={{ marginTop: '20px', padding: '40px', border: '1px dashed var(--border-color)', borderRadius: '8px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                    No applications tracked yet. Click "Add Real Job" to track real job applications manually, or upload a resume to start autonomous job hunts.
+                  </div>
                 ) : (
                   <>
-                    <div className="table-controls-bar">
-                      <div className="search-wrapper">
-                        <Search size={16} className="search-icon" />
-                        <input
-                          type="text"
-                          placeholder="Search by job title or company..."
-                          value={appliedSearchQuery}
-                          onChange={(e) => setAppliedSearchQuery(e.target.value)}
-                          className="table-search-input"
-                        />
-                      </div>
-                      <div className="filter-wrapper">
-                        <span className="filter-label">Status:</span>
-                        <select
-                          value={appliedStatusFilter}
-                          onChange={(e) => setAppliedStatusFilter(e.target.value)}
-                          className="table-filter-select"
-                        >
-                          <option value="All">All Statuses</option>
-                          <option value="Applied">Applied</option>
-                          <option value="Under Review">Under Review</option>
-                          <option value="Interviewing">Interviewing</option>
-                          <option value="Rejected">Rejected</option>
-                        </select>
-                      </div>
-                    </div>
-
                     {filteredJobs.length === 0 ? (
                       <div className="table-no-results">
                         <AlertTriangle size={24} style={{ color: '#f57c00', marginBottom: '8px' }} />
@@ -1363,15 +1815,44 @@ function App() {
                           </thead>
                           <tbody>
                             {filteredJobs.map((app, i) => {
-                              const displayStatus = getDisplayStatus(app, i);
-                              const originalPostingUrl = app.jobUrl || `https://www.google.com/search?q=${encodeURIComponent(app.jobTitle + ' ' + app.company + ' jobs')}`;
+                              const displayStatus = getDisplayStatus(app);
+                              const isSimulatedUrl = (() => {
+                                if (!app.jobUrl) return true;
+                                try {
+                                  const parsedUrl = new URL(app.jobUrl);
+                                  const hostname = parsedUrl.hostname.toLowerCase();
+                                  const simulatedDomains = ['techinnovatorsinc.com', 'globalcoresystems.com'];
+                                  const isSimulatedDomain = simulatedDomains.some(
+                                    domain => hostname === domain || hostname.endsWith('.' + domain)
+                                  );
+                                  const isGenericCareerPath = parsedUrl.pathname.includes('/careers/apply') && 
+                                    hostname !== 'google.com' && !hostname.endsWith('.google.com');
+                                  return isSimulatedDomain || isGenericCareerPath;
+                                } catch {
+                                  return true; // Invalid URL = treat as simulated
+                                }
+                              })();
+                              const originalPostingUrl = isSimulatedUrl 
+                                ? `https://www.google.com/search?q=${encodeURIComponent(app.jobTitle + ' ' + app.company + ' jobs')}`
+                                : app.jobUrl;
                               return (
                                 <tr key={app._id || i}>
                                   <td className="serial-col"><strong>{i + 1}</strong></td>
                                   <td><strong>{app.jobTitle}</strong></td>
                                   <td>{app.company}</td>
                                   <td>{app.location || 'Remote'}</td>
-                                  <td className="status-col">{renderStatusBadge(displayStatus)}</td>
+                                  <td className="status-col">
+                                    <select
+                                      value={displayStatus}
+                                      onChange={(e) => handleStatusChange(app._id, e.target.value)}
+                                      className={`table-status-select select-${displayStatus.replace(' ', '-')}`}
+                                    >
+                                      <option value="applied">Applied</option>
+                                      <option value="under review">Under Review</option>
+                                      <option value="interviewing">Interviewing</option>
+                                      <option value="rejected">Rejected</option>
+                                    </select>
+                                  </td>
                                   <td>
                                     <div className="table-actions-cell">
                                       <button
@@ -1430,8 +1911,8 @@ function App() {
                 return acc;
               }, {});
               const interviewCount = (statusCounts['interviewing'] || 0);
-              const rejectedCount  = (statusCounts['rejected'] || 0);
-              const rejectionRate  = totalApplied > 0 ? Math.round((rejectedCount / totalApplied) * 100) : 0;
+              const rejectedCount = (statusCounts['rejected'] || 0);
+              const rejectionRate = totalApplied > 0 ? Math.round((rejectedCount / totalApplied) * 100) : 0;
 
               // --- Timeline: group by date (last N days) ---
               const buckets = {};
@@ -1449,24 +1930,24 @@ function App() {
                   if (key in buckets) buckets[key]++;
                 }
               });
-              const timelineKeys  = Object.keys(buckets);
-              const timelineVals  = Object.values(buckets);
-              const maxVal        = Math.max(...timelineVals, 1);
+              const timelineKeys = Object.keys(buckets);
+              const timelineVals = Object.values(buckets);
+              const maxVal = Math.max(...timelineVals, 1);
 
               // --- Donut segments ---
               const donutData = [
-                { label: 'Applied',      count: statusCounts['applied']      || 0, color: '#4fc3f7' },
-                { label: 'Under Review', count: statusCounts['under review']  || 0, color: '#f57c00' },
-                { label: 'Interviewing', count: statusCounts['interviewing']  || 0, color: '#66bb6a' },
-                { label: 'Rejected',     count: statusCounts['rejected']      || 0, color: '#ef5350' },
+                { label: 'Applied', count: statusCounts['applied'] || 0, color: '#4fc3f7' },
+                { label: 'Under Review', count: statusCounts['under review'] || 0, color: '#f57c00' },
+                { label: 'Interviewing', count: statusCounts['interviewing'] || 0, color: '#66bb6a' },
+                { label: 'Rejected', count: statusCounts['rejected'] || 0, color: '#ef5350' },
               ].filter(d => d.count > 0);
-              const donutTotal    = donutData.reduce((s, d) => s + d.count, 0) || 1;
+              const donutTotal = donutData.reduce((s, d) => s + d.count, 0) || 1;
               const r = 52, cx = 70, cy = 70, circumference = 2 * Math.PI * r;
               let donutOffset = 0;
               const donutSegments = donutData.map(seg => {
-                const pct    = seg.count / donutTotal;
-                const dash   = pct * circumference;
-                const gap    = circumference - dash;
+                const pct = seg.count / donutTotal;
+                const dash = pct * circumference;
+                const gap = circumference - dash;
                 const seg_el = { ...seg, dash, gap, offset: donutOffset };
                 donutOffset += dash;
                 return seg_el;
@@ -1475,10 +1956,10 @@ function App() {
               // --- Top Companies ---
               const companyCounts = {};
               filtered.forEach(app => { companyCounts[app.company] = (companyCounts[app.company] || 0) + 1; });
-              const topCompanies  = Object.entries(companyCounts)
+              const topCompanies = Object.entries(companyCounts)
                 .sort((a, b) => b[1] - a[1])
                 .slice(0, 8);
-              const maxCompany    = topCompanies[0]?.[1] || 1;
+              const maxCompany = topCompanies[0]?.[1] || 1;
 
               return (
                 <div className="analytics-container">
@@ -1487,7 +1968,7 @@ function App() {
                     <div className="analytics-filter-group">
                       <label className="analytics-filter-label">Date Range</label>
                       <div className="analytics-date-pills">
-                        {[['7','7 Days'],['14','14 Days'],['30','30 Days'],['all','All Time']].map(([val, label]) => (
+                        {[['7', '7 Days'], ['14', '14 Days'], ['30', '30 Days'], ['all', 'All Time']].map(([val, label]) => (
                           <button
                             key={val}
                             className={`analytics-date-pill ${analyticsDateRange === val ? 'active' : ''}`}
@@ -1513,28 +1994,28 @@ function App() {
                   {/* KPI Cards */}
                   <div className="analytics-kpi-row">
                     <div className="analytics-kpi-card">
-                      <div className="kpi-icon" style={{background:'rgba(79,195,247,0.15)'}}><Target size={20} color="#4fc3f7" /></div>
+                      <div className="kpi-icon" style={{ background: 'rgba(79,195,247,0.15)' }}><Target size={20} color="#4fc3f7" /></div>
                       <div className="kpi-body">
                         <span className="kpi-value">{totalApplied}</span>
                         <span className="kpi-label">Applications</span>
                       </div>
                     </div>
                     <div className="analytics-kpi-card">
-                      <div className="kpi-icon" style={{background:'rgba(245,124,0,0.15)'}}><Award size={20} color="#f57c00" /></div>
+                      <div className="kpi-icon" style={{ background: 'rgba(245,124,0,0.15)' }}><Award size={20} color="#f57c00" /></div>
                       <div className="kpi-body">
                         <span className="kpi-value">{latestAts > 0 ? `${latestAts}%` : '—'}</span>
                         <span className="kpi-label">Latest ATS Score</span>
                       </div>
                     </div>
                     <div className="analytics-kpi-card">
-                      <div className="kpi-icon" style={{background:'rgba(102,187,106,0.15)'}}><TrendingUp size={20} color="#66bb6a" /></div>
+                      <div className="kpi-icon" style={{ background: 'rgba(102,187,106,0.15)' }}><TrendingUp size={20} color="#66bb6a" /></div>
                       <div className="kpi-body">
                         <span className="kpi-value">{interviewCount}</span>
                         <span className="kpi-label">Interviewing</span>
                       </div>
                     </div>
                     <div className="analytics-kpi-card">
-                      <div className="kpi-icon" style={{background:'rgba(239,83,80,0.15)'}}><AlertTriangle size={20} color="#ef5350" /></div>
+                      <div className="kpi-icon" style={{ background: 'rgba(239,83,80,0.15)' }}><AlertTriangle size={20} color="#ef5350" /></div>
                       <div className="kpi-body">
                         <span className="kpi-value">{rejectionRate}%</span>
                         <span className="kpi-label">Rejection Rate</span>
@@ -1544,7 +2025,7 @@ function App() {
 
                   {totalApplied === 0 ? (
                     <div className="analytics-empty">
-                      <BarChart2 size={48} style={{opacity:0.25, marginBottom:'12px'}} />
+                      <BarChart2 size={48} style={{ opacity: 0.25, marginBottom: '12px' }} />
                       <p>No application data for the selected period.</p>
                       <small>Apply to jobs and return here to see your insights.</small>
                     </div>
@@ -1552,11 +2033,11 @@ function App() {
                     <div className="analytics-chart-grid">
                       {/* Timeline Bar Chart */}
                       <div className="analytics-chart-card">
-                        <h4 className="analytics-chart-title"><BarChart2 size={16}/> Applications Over Time</h4>
+                        <h4 className="analytics-chart-title"><BarChart2 size={16} /> Applications Over Time</h4>
                         <div className="analytics-bar-chart">
                           {timelineKeys.map((key, i) => (
                             <div key={key} className="analytics-bar-col">
-                              <div className="analytics-bar-tooltip">{timelineVals[i]} app{timelineVals[i] !== 1 ? 's' : ''}<br/>{key}</div>
+                              <div className="analytics-bar-tooltip">{timelineVals[i]} app{timelineVals[i] !== 1 ? 's' : ''}<br />{key}</div>
                               <div
                                 className="analytics-bar-fill"
                                 style={{
@@ -1572,7 +2053,7 @@ function App() {
 
                       {/* Status Donut Chart */}
                       <div className="analytics-chart-card">
-                        <h4 className="analytics-chart-title"><Target size={16}/> Status Breakdown</h4>
+                        <h4 className="analytics-chart-title"><Target size={16} /> Status Breakdown</h4>
                         <div className="analytics-donut-wrap">
                           <svg viewBox="0 0 140 140" className="analytics-donut-svg">
                             {donutSegments.map((seg, i) => (
@@ -1585,7 +2066,7 @@ function App() {
                                 strokeWidth="18"
                                 strokeDasharray={`${seg.dash} ${seg.gap}`}
                                 strokeDashoffset={-seg.offset + circumference * 0.25}
-                                style={{animationDelay: `${i * 120}ms`}}
+                                style={{ animationDelay: `${i * 120}ms` }}
                               />
                             ))}
                             <text x={cx} y={cy - 6} textAnchor="middle" className="donut-center-num">{totalApplied}</text>
@@ -1594,7 +2075,7 @@ function App() {
                           <div className="analytics-donut-legend">
                             {donutData.map(seg => (
                               <div key={seg.label} className="donut-legend-row">
-                                <span className="donut-legend-dot" style={{background: seg.color}} />
+                                <span className="donut-legend-dot" style={{ background: seg.color }} />
                                 <span className="donut-legend-name">{seg.label}</span>
                                 <span className="donut-legend-count">{seg.count}</span>
                               </div>
@@ -1605,19 +2086,19 @@ function App() {
 
                       {/* Top Companies */}
                       <div className="analytics-chart-card analytics-chart-wide">
-                        <h4 className="analytics-chart-title"><TrendingUp size={16}/> Top Target Companies</h4>
+                        <h4 className="analytics-chart-title"><TrendingUp size={16} /> Top Target Companies</h4>
                         {topCompanies.length === 0 ? (
                           <p className="analytics-sub">No data</p>
                         ) : (
                           <div className="analytics-company-list">
                             {topCompanies.map(([company, count], i) => (
                               <div key={company} className="analytics-company-row">
-                                <span className="company-rank">#{i+1}</span>
+                                <span className="company-rank">#{i + 1}</span>
                                 <span className="company-name">{company}</span>
                                 <div className="company-bar-track">
                                   <div
                                     className="company-bar-fill"
-                                    style={{width:`${(count/maxCompany)*100}%`, animationDelay:`${i*60}ms`}}
+                                    style={{ width: `${(count / maxCompany) * 100}%`, animationDelay: `${i * 60}ms` }}
                                   />
                                 </div>
                                 <span className="company-count">{count}</span>
