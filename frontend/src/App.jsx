@@ -11,11 +11,70 @@ import {
   Plus, Trash2, X, Sun, Moon, Square, Menu, AlertTriangle, Briefcase,
   MessageSquare, Mail, FileText, RefreshCw, Star, Archive, MoreVertical,
   CornerUpLeft, CornerUpRight, ExternalLink, BarChart2, TrendingUp,
-  Award, Target, ArrowLeft
+  Award, Target, ArrowLeft, HelpCircle
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { GoogleLogin } from '@react-oauth/google';
 import './App.css';
+
+const TOUR_STEPS = [
+  {
+    target: null,
+    title: "Welcome to AI ChatBot & Job Portal! 🚀",
+    content: "Let's take a quick 1-minute tour to help you navigate and master the platform's features.",
+    view: 'chat',
+    position: 'center'
+  },
+  {
+    target: '.theme-toggle-btn',
+    title: "Theme Toggle ☀️/🌙",
+    content: "Switch between Dark and Light mode anytime for your reading comfort.",
+    view: 'chat',
+    position: 'bottom'
+  },
+  {
+    target: '.job-hunt-toggle',
+    title: "Job-Hunt Mode 💼",
+    content: "Toggle this switch to transition between AI Chat mode and your AI-autonomous Job Application Dashboard.",
+    view: 'chat',
+    position: 'bottom'
+  },
+  {
+    target: '.chat-sidebar',
+    title: "Chat Navigation 💬",
+    content: "Access your chat history, start new conversations, and manage saved chats.",
+    view: 'chat',
+    position: 'right'
+  },
+  {
+    target: '.attach-toggle-btn',
+    title: "Upload Resumes & Files 📎",
+    content: "Upload your resume for evaluation, or attach images and text files to analyze with AI.",
+    view: 'chat',
+    position: 'top'
+  },
+  {
+    target: '.job-dashboard-sidebar',
+    title: "Dashboard Menu 📊",
+    content: "Navigate between Resume & ATS evaluations, candidate email Inbox, Applied Jobs tracker, and Analytics charts.",
+    view: 'dashboard',
+    position: 'right'
+  },
+  {
+    target: '.resume-dropzone',
+    title: "Resume & ATS Evaluator 📄",
+    content: "Upload your resume to get an instant AI ATS match score, missing keywords, and formatting suggestions.",
+    view: 'dashboard',
+    position: 'bottom'
+  },
+  {
+    target: null,
+    title: "You're All Set! 🎉",
+    content: "You are now ready to chat, evaluate your resume, and track your jobs. Happy hunting!",
+    view: 'dashboard',
+    position: 'center'
+  }
+];
 
 const generateEmailBody = (app) => {
   return `
@@ -110,6 +169,9 @@ function App() {
   const [showExecutionLog, setShowExecutionLog] = useState(false);
   const [dashboardMenuOpen, setDashboardMenuOpen] = useState(false);
   const [expandedRowId, setExpandedRowId] = useState(null);
+  const [tourStep, setTourStep] = useState(null);
+  const [highlightStyle, setHighlightStyle] = useState({ display: 'none' });
+  const [popoverStyle, setPopoverStyle] = useState({});
 
   // Goal 7: Candidate Inbox states
   const [inboxEmails, setInboxEmails] = useState([]);
@@ -223,6 +285,184 @@ function App() {
       setCurrentView('chat');
     }
   }, [jobHuntMode, fetchJobHuntHistory]);
+
+  // --- Guided Onboarding Tour Functions ---
+  const handleSkipTour = () => {
+    if (user) {
+      const userKey = user.email || user.id || 'default_user';
+      localStorage.setItem(`tour_completed_${userKey}`, 'true');
+    }
+    setTourStep(null);
+  };
+
+  const handleNextTourStep = () => {
+    if (tourStep === TOUR_STEPS.length - 1) {
+      handleSkipTour();
+    } else {
+      setTourStep(prev => prev + 1);
+    }
+  };
+
+  const handlePrevTourStep = () => {
+    if (tourStep > 0) {
+      setTourStep(prev => prev - 1);
+    }
+  };
+
+  // Position popover and highlight box based on target DOM element coordinates
+  const positionTourStep = (step) => {
+    if (!step.target) {
+      setHighlightStyle({ display: 'none' });
+      setPopoverStyle({
+        position: 'fixed',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        zIndex: 2100
+      });
+      return;
+    }
+
+    const element = document.querySelector(step.target);
+    if (!element) {
+      // Fallback
+      setHighlightStyle({ display: 'none' });
+      setPopoverStyle({
+        position: 'fixed',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        zIndex: 2100
+      });
+      return;
+    }
+
+    const rect = element.getBoundingClientRect();
+    setHighlightStyle({
+      position: 'fixed',
+      top: rect.top - 4,
+      left: rect.left - 4,
+      width: rect.width + 8,
+      height: rect.height + 8,
+      zIndex: 2100,
+      display: 'block'
+    });
+
+    let top = 0;
+    let left = 0;
+    let transform = 'none';
+    const cardWidth = 290;
+
+    // Calculate preliminary coordinates without horizontal translate to make boundary checks simple and exact
+    if (step.position === 'bottom') {
+      top = rect.bottom + 12;
+      left = rect.left + rect.width / 2 - cardWidth / 2;
+      transform = 'none';
+    } else if (step.position === 'top') {
+      top = rect.top - 12;
+      left = rect.left + rect.width / 2 - cardWidth / 2;
+      transform = 'translateY(-100%)';
+    } else if (step.position === 'right') {
+      top = rect.top + rect.height / 2;
+      left = rect.right + 12;
+      transform = 'translateY(-50%)';
+    } else if (step.position === 'left') {
+      top = rect.top + rect.height / 2;
+      left = rect.left - 12 - cardWidth;
+      transform = 'translateY(-50%)';
+    }
+
+    // Horizontal boundary checking (keep card fully on-screen)
+    if (left < 10) {
+      left = 10;
+    }
+    if (left + cardWidth > window.innerWidth - 10) {
+      left = window.innerWidth - cardWidth - 10;
+    }
+
+    // Vertical boundary checking
+    if (top < 10) {
+      top = 10;
+      if (transform.includes('translateY(-100%)')) {
+        transform = 'none'; // Revert top translation if it hits screen top
+        top = rect.bottom + 12; // Flip to bottom
+      }
+    }
+    const estimatedHeight = 220; // safe guess for card height limit
+    if (top + estimatedHeight > window.innerHeight - 10) {
+      top = window.innerHeight - estimatedHeight - 10;
+      if (top < 10) top = 10;
+    }
+
+    setPopoverStyle({
+      position: 'fixed',
+      top: top,
+      left: left,
+      transform: transform,
+      zIndex: 2100
+    });
+  };
+
+  // Run positioning whenever tourStep changes
+  useEffect(() => {
+    if (tourStep === null || tourStep < 0 || tourStep >= TOUR_STEPS.length) return;
+    const step = TOUR_STEPS[tourStep];
+
+    const isMobile = window.innerWidth <= 768;
+
+    // Automatically toggle hamburger menus on mobile for specific sidebar steps
+    if (isMobile) {
+      if (step.target === '.chat-sidebar') {
+        setIsSidebarOpen(true);
+      } else {
+        setIsSidebarOpen(false);
+      }
+
+      if (step.target === '.job-dashboard-sidebar') {
+        setDashboardMenuOpen(true);
+      } else {
+        setDashboardMenuOpen(false);
+      }
+    }
+
+    // Ensure Dashboard Resume Tab is active when in dashboard tour steps
+    if (step.view === 'dashboard') {
+      setDashboardSidebarTab('resume');
+    }
+
+    // Switch views programmatically if needed
+    if (step.view !== currentView) {
+      if (step.view === 'dashboard') {
+        setJobHuntMode(true);
+        setCurrentView('dashboard');
+      } else {
+        setJobHuntMode(false);
+        setCurrentView('chat');
+      }
+      // Give DOM a bit to render new view and let sidebar transitions settle
+      const timer = setTimeout(() => positionTourStep(step), 350);
+      return () => clearTimeout(timer);
+    } else {
+      // Give DOM a bit to settle transitions
+      const timer = setTimeout(() => positionTourStep(step), 350);
+      return () => clearTimeout(timer);
+    }
+  }, [tourStep, currentView, jobHuntMode, setIsSidebarOpen, setDashboardMenuOpen, setDashboardSidebarTab]);
+
+  // First login check effect
+  useEffect(() => {
+    if (user) {
+      const userKey = user.email || user.id || 'default_user';
+      const tourCompleted = localStorage.getItem(`tour_completed_${userKey}`);
+      if (!tourCompleted) {
+        // Delay slightly for smooth page mount
+        const timer = setTimeout(() => setTourStep(0), 1000);
+        return () => clearTimeout(timer);
+      }
+    } else {
+      setTourStep(null);
+    }
+  }, [user]);
 
   // --- Warning Card Effects & Trigger ---
   useEffect(() => {
@@ -1115,6 +1355,10 @@ function App() {
         <div className="nav-actions">
           <button className="theme-toggle-btn" onClick={toggleTheme} title="Toggle Theme">
             {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
+
+          <button className="tour-trigger-btn" onClick={() => setTourStep(0)} title="Take Guided Onboarding Tour">
+            <HelpCircle size={20} />
           </button>
 
           <div
@@ -2279,6 +2523,41 @@ function App() {
             <pre className="cover-letter-content">{selectedCoverLetter}</pre>
           </div>
         </div>
+      )}
+
+      {tourStep !== null && tourStep >= 0 && tourStep < TOUR_STEPS.length && (
+        <>
+          {/* Transparent click backdrop to prevent clicking background elements during tour */}
+          <div className="tour-backdrop-blocker" onClick={handleSkipTour}></div>
+
+          {/* Cutout Highlight Box */}
+          <div className="tour-element-highlight" style={highlightStyle}></div>
+
+          {/* Tour Popover Tooltip */}
+          <div className="tour-popover-card" style={popoverStyle}>
+            <div className="tour-popover-header">
+              <span className="tour-step-indicator">Step {tourStep + 1} of {TOUR_STEPS.length}</span>
+              <button className="tour-close-btn" onClick={handleSkipTour} title="Skip Tour">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="tour-popover-body">
+              <h3>{TOUR_STEPS[tourStep].title}</h3>
+              <p>{TOUR_STEPS[tourStep].content}</p>
+            </div>
+            <div className="tour-popover-footer">
+              <button className="tour-skip-btn-text" onClick={handleSkipTour}>Skip</button>
+              <div className="tour-nav-btns">
+                {tourStep > 0 && (
+                  <button className="tour-prev-btn" onClick={handlePrevTourStep}>Back</button>
+                )}
+                <button className="tour-next-btn" onClick={handleNextTourStep}>
+                  {tourStep === TOUR_STEPS.length - 1 ? 'Finish' : 'Next'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

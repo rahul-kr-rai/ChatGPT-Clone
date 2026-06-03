@@ -201,6 +201,24 @@ body,
   background: var(--bg-hover);
 }
 
+/* Tour Help Trigger Button */
+.tour-trigger-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-main);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.tour-trigger-btn:hover {
+  background: var(--bg-hover);
+}
+
 /* --- Job-Hunt Toggle Switch --- */
 .job-hunt-toggle {
   display: flex;
@@ -4291,5 +4309,178 @@ span[style*="206,145,120"] {
     flex-direction: column;
     align-items: center;
     gap: 16px;
+  }
+}
+
+/* ==========================================================================
+   GUIDED PORTAL ONBOARDING TOUR STYLES
+   ========================================================================== */
+
+/* Click-blocker backdrop during tour */
+.tour-backdrop-blocker {
+  position: fixed;
+  inset: 0;
+  z-index: 2040;
+  background-color: transparent;
+}
+
+/* cut-out dark overlay that focuses the highlighted element */
+.tour-element-highlight {
+  border: 2px solid #f57c00;
+  border-radius: 8px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.75), 0 0 15px rgba(245, 124, 0, 0.4);
+  pointer-events: none;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Popover Card (Glassmorphic) */
+.tour-popover-card {
+  width: 290px;
+  background: rgba(30, 30, 30, 0.85);
+  border: 1.5px solid rgba(245, 124, 0, 0.4);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: var(--text-main);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: tour-slide-in 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-theme="light"] .tour-popover-card {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1.5px solid rgba(245, 124, 0, 0.4);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  color: #333333;
+}
+
+.tour-popover-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 8px;
+}
+
+.tour-step-indicator {
+  font-size: 11px;
+  font-weight: 700;
+  color: #f57c00;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tour-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  transition: color 0.2s;
+}
+
+.tour-close-btn:hover {
+  color: #ef5350;
+}
+
+.tour-popover-body h3 {
+  font-size: 15px;
+  margin: 0 0 6px 0;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+[data-theme="light"] .tour-popover-body h3 {
+  color: #000000;
+}
+
+.tour-popover-body p {
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+[data-theme="light"] .tour-popover-body p {
+  color: #555555;
+}
+
+.tour-popover-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.tour-skip-btn-text {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: color 0.2s;
+}
+
+.tour-skip-btn-text:hover {
+  color: var(--text-main);
+  text-decoration: underline;
+}
+
+.tour-nav-btns {
+  display: flex;
+  gap: 8px;
+}
+
+.tour-prev-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tour-prev-btn:hover {
+  background-color: var(--bg-hover);
+}
+
+.tour-next-btn {
+  background: #f57c00;
+  border: 1px solid #f57c00;
+  color: #ffffff;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(245, 124, 0, 0.25);
+}
+
+.tour-next-btn:hover {
+  background: #e65100;
+  border-color: #e65100;
+  box-shadow: 0 4px 12px rgba(245, 124, 0, 0.4);
+}
+
+@keyframes tour-slide-in {
+  from {
+    transform: translate3d(0, 8px, 0);
+    opacity: 0;
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
   }
 }
