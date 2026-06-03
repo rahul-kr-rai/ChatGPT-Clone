@@ -109,6 +109,7 @@ function App() {
   const [uploadedResume, setUploadedResume] = useState(null);
   const [showExecutionLog, setShowExecutionLog] = useState(false);
   const [dashboardMenuOpen, setDashboardMenuOpen] = useState(false);
+  const [expandedRowId, setExpandedRowId] = useState(null);
 
   // Goal 7: Candidate Inbox states
   const [inboxEmails, setInboxEmails] = useState([]);
@@ -1832,17 +1833,18 @@ function App() {
                         <table className="jobs-table">
                           <thead>
                             <tr>
-                              <th style={{ width: '60px' }}>#</th>
+                              <th>#</th>
                               <th>Job Title</th>
                               <th>Company</th>
-                              <th>Location</th>
-                              <th>Status</th>
-                              <th style={{ width: '220px' }}>Action</th>
+                              <th className="location-col">Location</th>
+                              <th className="status-col">Status</th>
+                              <th className="action-col">Action</th>
                             </tr>
                           </thead>
                           <tbody>
                             {filteredJobs.map((app, i) => {
                               const displayStatus = getDisplayStatus(app);
+                              const rowKey = app._id || i;
                               const isSimulatedUrl = (() => {
                                 if (!app.jobUrl) return true;
                                 try {
@@ -1863,47 +1865,103 @@ function App() {
                                 ? `https://www.google.com/search?q=${encodeURIComponent(app.jobTitle + ' ' + app.company + ' jobs')}`
                                 : app.jobUrl;
                               return (
-                                <tr key={app._id || i}>
-                                  <td className="serial-col"><strong>{i + 1}</strong></td>
-                                  <td><strong>{app.jobTitle}</strong></td>
-                                  <td>{app.company}</td>
-                                  <td>{app.location || 'Remote'}</td>
-                                  <td className="status-col">
-                                    <select
-                                      value={displayStatus}
-                                      onChange={(e) => handleStatusChange(app._id, e.target.value)}
-                                      className={`table-status-select select-${displayStatus.replace(' ', '-')}`}
-                                    >
-                                      <option value="applied">Applied</option>
-                                      <option value="under review">Under Review</option>
-                                      <option value="interviewing">Interviewing</option>
-                                      <option value="rejected">Rejected</option>
-                                    </select>
-                                  </td>
-                                  <td>
-                                    <div className="table-actions-cell">
+                                <React.Fragment key={rowKey}>
+                                  <tr className={expandedRowId === rowKey ? 'row-expanded' : ''}>
+                                    <td className="serial-col"><strong>{i + 1}</strong></td>
+                                    <td><strong>{app.jobTitle}</strong></td>
+                                    <td>{app.company}</td>
+                                    <td className="location-col">{app.location || 'Remote'}</td>
+                                    <td className="status-col">
+                                      <select
+                                        value={displayStatus}
+                                        onChange={(e) => handleStatusChange(app._id, e.target.value)}
+                                        className={`table-status-select select-${displayStatus.replace(' ', '-')}`}
+                                      >
+                                        <option value="applied">Applied</option>
+                                        <option value="under review">Under Review</option>
+                                        <option value="interviewing">Interviewing</option>
+                                        <option value="rejected">Rejected</option>
+                                      </select>
+                                    </td>
+                                    <td className="action-col">
+                                      <div className="table-actions-cell desktop-only">
+                                        <button
+                                          className="view-letter-btn"
+                                          onClick={() => {
+                                            setSelectedCoverLetter(app.coverLetter);
+                                            setSelectedJobTitle(app.jobTitle);
+                                            setShowCoverLetterModal(true);
+                                          }}
+                                        >
+                                          Cover Letter
+                                        </button>
+                                        <a
+                                          href={originalPostingUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="job-external-link-btn"
+                                          title="View Original Posting"
+                                        >
+                                          <ExternalLink size={14} /> Job Post
+                                        </a>
+                                      </div>
                                       <button
-                                        className="view-letter-btn"
-                                        onClick={() => {
-                                          setSelectedCoverLetter(app.coverLetter);
-                                          setSelectedJobTitle(app.jobTitle);
-                                          setShowCoverLetterModal(true);
-                                        }}
+                                        className="view-details-toggle-btn mobile-only"
+                                        onClick={() => setExpandedRowId(expandedRowId === rowKey ? null : rowKey)}
                                       >
-                                        Cover Letter
+                                        {expandedRowId === rowKey ? 'Hide Details' : 'View Details'}
                                       </button>
-                                      <a
-                                        href={originalPostingUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="job-external-link-btn"
-                                        title="View Original Posting"
-                                      >
-                                        <ExternalLink size={14} /> Job Post
-                                      </a>
-                                    </div>
-                                  </td>
-                                </tr>
+                                    </td>
+                                  </tr>
+
+                                  {expandedRowId === rowKey && (
+                                    <tr className="expanded-detail-row mobile-only-tr">
+                                      <td colSpan={4}>
+                                        <div className="expanded-detail-container">
+                                          <div className="expanded-detail-item">
+                                            <span className="expanded-detail-label">Status:</span>
+                                            <div className="expanded-detail-value">
+                                              <select
+                                                value={displayStatus}
+                                                onChange={(e) => handleStatusChange(app._id, e.target.value)}
+                                                className={`table-status-select select-${displayStatus.replace(' ', '-')}`}
+                                              >
+                                                <option value="applied">Applied</option>
+                                                <option value="under review">Under Review</option>
+                                                <option value="interviewing">Interviewing</option>
+                                                <option value="rejected">Rejected</option>
+                                              </select>
+                                            </div>
+                                          </div>
+                                          <div className="expanded-detail-item">
+                                            <span className="expanded-detail-label">Actions:</span>
+                                            <div className="expanded-detail-value expanded-actions">
+                                              <button
+                                                className="view-letter-btn"
+                                                onClick={() => {
+                                                  setSelectedCoverLetter(app.coverLetter);
+                                                  setSelectedJobTitle(app.jobTitle);
+                                                  setShowCoverLetterModal(true);
+                                                }}
+                                              >
+                                                Cover Letter
+                                              </button>
+                                              <a
+                                                href={originalPostingUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="job-external-link-btn"
+                                                title="View Original Posting"
+                                              >
+                                                <ExternalLink size={14} /> Job Post
+                                              </a>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  )}
+                                </React.Fragment>
                               );
                             })}
                           </tbody>
