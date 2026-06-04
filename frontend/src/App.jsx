@@ -490,9 +490,13 @@ function App() {
       const userKey = user.email || user.id || 'default_user';
       const tourCompleted = localStorage.getItem(`tour_completed_${userKey}`);
       if (!tourCompleted) {
+        // Reset tourStep to null immediately to clear any guest tour state and ensure a clean transition
+        setTourStep(null);
         // Delay slightly for smooth page mount
         const timer = setTimeout(() => setTourStep(0), 1000);
         return () => clearTimeout(timer);
+      } else {
+        setTourStep(null);
       }
     } else {
       // Guest User auto-onboarding tour check
@@ -502,6 +506,7 @@ function App() {
 
       if (!lastCompleted || (now - Number(lastCompleted)) > THIRTY_DAYS) {
         localStorage.setItem('guest_tour_completed_at', now.toString());
+        setTourStep(null); // Ensure clean start
         // Delay slightly for smooth page mount
         const timer = setTimeout(() => setTourStep(0), 1500);
         return () => clearTimeout(timer);
@@ -844,6 +849,18 @@ function App() {
             };
           });
           setInboxEmails(prev => [...newEmails, ...prev]);
+
+          // Redirect to Applied Jobs tab and show success alert
+          setCurrentView('dashboard');
+          setDashboardSidebarTab('applied');
+          Swal.fire({
+            title: 'Applications Submitted! 🎉',
+            text: `Successfully applied to ${freshApps.length} new job${freshApps.length > 1 ? 's' : ''}. You can now track them on your Applied Jobs table.`,
+            icon: 'success',
+            confirmButtonColor: '#10a37f',
+            background: theme === 'dark' ? '#232323ff' : '#ffffff',
+            color: theme === 'dark' ? '#fff' : '#000'
+          });
         }
       }
 
@@ -947,6 +964,18 @@ function App() {
           };
         });
         setInboxEmails(prev => [...newEmails, ...prev]);
+
+        // Redirect to Applied Jobs tab and show success alert
+        setCurrentView('dashboard');
+        setDashboardSidebarTab('applied');
+        Swal.fire({
+          title: 'Applications Submitted! 🎉',
+          text: `Successfully applied to ${freshApps.length} new job${freshApps.length > 1 ? 's' : ''}. You can now track them on your Applied Jobs table.`,
+          icon: 'success',
+          confirmButtonColor: '#10a37f',
+          background: theme === 'dark' ? '#232323ff' : '#ffffff',
+          color: theme === 'dark' ? '#fff' : '#000'
+        });
       }
 
     } catch (err) {
