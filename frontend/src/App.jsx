@@ -76,6 +76,37 @@ const TOUR_STEPS = [
   }
 ];
 
+const GUEST_TOUR_STEPS = [
+  {
+    target: null,
+    title: "Welcome to AI ChatBot & Job Portal! 🚀",
+    content: "Let's take a quick 1-minute tour to help you navigate and master the platform's features, including our autonomous job-hunting tools.",
+    view: 'chat',
+    position: 'center'
+  },
+  {
+    target: '.theme-toggle-btn',
+    title: "Theme Toggle ☀️/🌙",
+    content: "Switch between Dark and Light mode anytime for your reading comfort.",
+    view: 'chat',
+    position: 'bottom'
+  },
+  {
+    target: '.job-hunt-toggle',
+    title: "Autonomous Job-Hunt Mode 💼",
+    content: "This is our standout feature! Turning this on triggers an AI Agent that uploads your resume, checks your ATS score, automatically searches live jobs, and applies on your behalf.",
+    view: 'chat',
+    position: 'bottom'
+  },
+  {
+    target: '.login-trigger',
+    title: "Unlock Full Access 🔑",
+    content: "Log in or sign up to activate Job-Hunt Mode, save your chat histories, and access the autonomous job application dashboard.",
+    view: 'chat',
+    position: 'bottom'
+  }
+];
+
 const generateEmailBody = (app) => {
   return `
     <div class="gmail-email-card" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid var(--border-email-card); border-radius: 8px; background-color: var(--bg-email-card); color: var(--text-email-card-main);">
@@ -172,6 +203,8 @@ function App() {
   const [tourStep, setTourStep] = useState(null);
   const [highlightStyle, setHighlightStyle] = useState({ display: 'none' });
   const [popoverStyle, setPopoverStyle] = useState({});
+
+  const activeTourSteps = user ? TOUR_STEPS : GUEST_TOUR_STEPS;
 
   // Goal 7: Candidate Inbox states
   const [inboxEmails, setInboxEmails] = useState([]);
@@ -291,12 +324,14 @@ function App() {
     if (user) {
       const userKey = user.email || user.id || 'default_user';
       localStorage.setItem(`tour_completed_${userKey}`, 'true');
+    } else {
+      localStorage.setItem('guest_tour_completed_at', Date.now().toString());
     }
     setTourStep(null);
   };
 
   const handleNextTourStep = () => {
-    if (tourStep === TOUR_STEPS.length - 1) {
+    if (tourStep === activeTourSteps.length - 1) {
       handleSkipTour();
     } else {
       setTourStep(prev => prev + 1);
@@ -405,8 +440,8 @@ function App() {
 
   // Run positioning whenever tourStep changes
   useEffect(() => {
-    if (tourStep === null || tourStep < 0 || tourStep >= TOUR_STEPS.length) return;
-    const step = TOUR_STEPS[tourStep];
+    if (tourStep === null || tourStep < 0 || tourStep >= activeTourSteps.length) return;
+    const step = activeTourSteps[tourStep];
 
     const isMobile = window.innerWidth <= 768;
 
@@ -447,7 +482,7 @@ function App() {
       const timer = setTimeout(() => positionTourStep(step), 350);
       return () => clearTimeout(timer);
     }
-  }, [tourStep, currentView, jobHuntMode, setIsSidebarOpen, setDashboardMenuOpen, setDashboardSidebarTab]);
+  }, [tourStep, currentView, jobHuntMode, setIsSidebarOpen, setDashboardMenuOpen, setDashboardSidebarTab, activeTourSteps]);
 
   // First login check effect
   useEffect(() => {
@@ -460,7 +495,19 @@ function App() {
         return () => clearTimeout(timer);
       }
     } else {
-      setTourStep(null);
+      // Guest User auto-onboarding tour check
+      const lastCompleted = localStorage.getItem('guest_tour_completed_at');
+      const now = Date.now();
+      const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000; // 30 days in ms
+
+      if (!lastCompleted || (now - Number(lastCompleted)) > THIRTY_DAYS) {
+        localStorage.setItem('guest_tour_completed_at', now.toString());
+        // Delay slightly for smooth page mount
+        const timer = setTimeout(() => setTourStep(0), 1500);
+        return () => clearTimeout(timer);
+      } else {
+        setTourStep(null);
+      }
     }
   }, [user]);
 
@@ -2525,7 +2572,7 @@ function App() {
         </div>
       )}
 
-      {tourStep !== null && tourStep >= 0 && tourStep < TOUR_STEPS.length && (
+      {tourStep !== null && tourStep >= 0 && tourStep < activeTourSteps.length && (
         <>
           {/* Transparent click backdrop to prevent clicking background elements during tour */}
           <div className="tour-backdrop-blocker" onClick={handleSkipTour}></div>
@@ -2536,14 +2583,14 @@ function App() {
           {/* Tour Popover Tooltip */}
           <div className="tour-popover-card" style={popoverStyle}>
             <div className="tour-popover-header">
-              <span className="tour-step-indicator">Step {tourStep + 1} of {TOUR_STEPS.length}</span>
+              <span className="tour-step-indicator">Step {tourStep + 1} of {activeTourSteps.length}</span>
               <button className="tour-close-btn" onClick={handleSkipTour} title="Skip Tour">
                 <X size={16} />
               </button>
             </div>
             <div className="tour-popover-body">
-              <h3>{TOUR_STEPS[tourStep].title}</h3>
-              <p>{TOUR_STEPS[tourStep].content}</p>
+              <h3>{activeTourSteps[tourStep].title}</h3>
+              <p>{activeTourSteps[tourStep].content}</p>
             </div>
             <div className="tour-popover-footer">
               <button className="tour-skip-btn-text" onClick={handleSkipTour}>Skip</button>
@@ -2552,7 +2599,7 @@ function App() {
                   <button className="tour-prev-btn" onClick={handlePrevTourStep}>Back</button>
                 )}
                 <button className="tour-next-btn" onClick={handleNextTourStep}>
-                  {tourStep === TOUR_STEPS.length - 1 ? 'Finish' : 'Next'}
+                  {tourStep === activeTourSteps.length - 1 ? 'Finish' : 'Next'}
                 </button>
               </div>
             </div>
