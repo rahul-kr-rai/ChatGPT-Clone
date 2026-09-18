@@ -40,7 +40,7 @@ app.use(express.json({ limit: '50mb' }));
 // CORS: Allow your Vercel frontend and Localhost
 const allowedOrigins = [
   "http://localhost:5173", // Local frontend
-  "https://chat-gpt-clone-six-alpha.vercel.app", // Your Vercel App
+  "https://chat-gpt-clone-six-alpha.vercel.app", // Your Vercel App (production)
   process.env.CLIENT_URL // Optional: Add via env var
 ];
 
@@ -48,12 +48,11 @@ app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) === -1) {
-      // Optional: Relax this for development if needed, but strict is safer
-      // return callback(null, true); 
-      return callback(new Error('The CORS policy for this site does not allow access from the specified Origin.'), false);
+    // Allow any Vercel preview deployment for this project
+    if (origin.endsWith('.vercel.app') || allowedOrigins.indexOf(origin) !== -1) {
+      return callback(null, true);
     }
-    return callback(null, true);
+    return callback(new Error('The CORS policy for this site does not allow access from the specified Origin.'), false);
   },
   credentials: true
 }));
