@@ -146,18 +146,68 @@ function fileToGenerativePart(buffer, mimeType) {
   };
 }
 
+// Detect queries that require current/real-time information or verification
+function isTimeSensitiveQuery(message, chatHistory = []) {
+  if (!message) return false;
+  const lowerMsg = message.toLowerCase();
+
+  // Time-sensitive keywords indicating the user wants current information
+  const currentTerms = [
+    'current', 'currently', 'latest', 'today', 'present', 'now',
+    'recent', 'newest', 'this year', 'this month', 'right now',
+    'as of', 'up to date', 'up-to-date', 'real-time', 'real time',
+    'live', 'ongoing', 'breaking', 'todays', "today's"
+  ];
+
+  // Verification keywords - user wants the model to re-check its answer
+  const verifyTerms = [
+    'verify', 'confirm', 'check', 'validate', 'fact-check', 'fact check',
+    'is that correct', 'is that right', 'are you sure', 'double check',
+    'double-check', 'cross check', 'cross-check', 'is this accurate',
+    'is that accurate', 'is this true', 'is that true'
+  ];
+
+  // Query patterns commonly associated with current/live information
+  const currentInfoPatterns = [
+    'who is the', 'who are the', 'what is the current',
+    'who holds', 'who runs', 'who leads', 'who governs',
+    'chief minister', 'prime minister', 'president of', 'governor of',
+    'ceo of', 'chairman of', 'director of', 'secretary of', 'minister of',
+    'score', 'weather', 'stock price', 'share price', 'exchange rate',
+    'election result', 'latest news'
+  ];
+
+  const hasCurrentTerm = currentTerms.some(term => lowerMsg.includes(term));
+  const hasVerifyTerm = verifyTerms.some(term => lowerMsg.includes(term));
+  const hasCurrentInfoPattern = currentInfoPatterns.some(term => lowerMsg.includes(term));
+
+  // If verification is requested and there's prior context, trigger search
+  if (hasVerifyTerm && chatHistory.length > 0) return true;
+
+  // If the query explicitly mentions current/latest info
+  if (hasCurrentTerm) return true;
+
+  // If the query pattern suggests current information is needed
+  if (hasCurrentInfoPattern) return true;
+
+  return false;
+}
+
 // Helper to query Gemini with automatic model failover and retries on transient errors
 // When chatHistory is provided, uses startChat() for multi-turn conversations instead of stateless generateContent()
-async function generateContentWithFallback(promptParts, systemInstruction = undefined, retriesPerModel = 2, delay = 1000, chatHistory = null) {
+// When tools is provided (e.g. Google Search grounding), passes it to the model config
+async function generateContentWithFallback(promptParts, systemInstruction = undefined, retriesPerModel = 2, delay = 1000, chatHistory = null, tools = null) {
   const models = ["gemini-3.5-flash", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"];
   let lastError = null;
 
   for (const modelName of models) {
     try {
-      const model = genAI.getGenerativeModel({
+      const modelConfig = {
         model: modelName,
         systemInstruction: systemInstruction
-      });
+      };
+      if (tools) modelConfig.tools = tools;
+      const model = genAI.getGenerativeModel(modelConfig);
 
       let currentDelay = delay;
       for (let i = 0; i < retriesPerModel; i++) {
@@ -231,6 +281,8 @@ app.post('/api/chat', apiLimiter, optionalAuth, upload.single('file'), async (re
         2. FORMATTING: Always use clear Markdown formatting. Use bolding for key terms and code blocks for any programming examples.
         3. TONE: Be helpful and encouraging. If a user is stuck on code, explain the logic step-by-step.
         4. SAFETY: Do not share personal private data about your creator other than his name.
+        5. CURRENT INFORMATION: When asked about current office holders (Chief Ministers, Prime Ministers, Presidents, Governors, CEOs, etc.), current events, live scores, weather, stock prices, or any time-sensitive factual information, you MUST use your Google Search tool to look up the latest information. Never rely solely on your training data for such queries. Always include the date or source of the information when providing time-sensitive facts.
+        6. VERIFICATION: When the user asks you to "verify", "confirm", "fact-check", or "double-check" your previous answer, you MUST perform a fresh web search to independently verify the information. Do NOT simply repeat your previous answer. If your previous answer was incorrect or outdated, clearly acknowledge the correction. Never claim information is "verified" unless you have actually performed a fresh lookup.
         `
       }]
     };
@@ -297,8 +349,15 @@ app.post('/api/chat', apiLimiter, optionalAuth, upload.single('file'), async (re
       return res.status(400).json({ error: "Message or file is required" });
     }
 
-    // Pass chatHistory so Gemini uses multi-turn conversation context
-    const result = await generateContentWithFallback(promptParts, systemInstruction, 2, 1000, chatHistory);
+    // Enable Google Search grounding for time-sensitive queries (current info, verification, etc.)
+    const needsCurrentInfo = isTimeSensitiveQuery(message, chatHistory);
+    const tools = needsCurrentInfo ? [{ googleSearch: {} }] : null;
+    if (needsCurrentInfo) {
+      console.log(`🔍 [Chat] Google Search grounding enabled for query: "${message?.substring(0, 60)}..."`);
+    }
+
+    // Pass chatHistory and tools so Gemini uses multi-turn context + web grounding when needed
+    const result = await generateContentWithFallback(promptParts, systemInstruction, 2, 1000, chatHistory, tools);
     const botResponse = result.response.text();
 
     if (req.user) {
