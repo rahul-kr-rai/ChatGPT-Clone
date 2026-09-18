@@ -147,7 +147,8 @@ function fileToGenerativePart(buffer, mimeType) {
 }
 
 // Helper to query Gemini with automatic model failover and retries on transient errors
-async function generateContentWithFallback(promptParts, systemInstruction = undefined, retriesPerModel = 2, delay = 1000) {
+// When chatHistory is provided, uses startChat() for multi-turn conversations instead of stateless generateContent()
+async function generateContentWithFallback(promptParts, systemInstruction = undefined, retriesPerModel = 2, delay = 1000, chatHistory = null) {
   const models = ["gemini-3.5-flash", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"];
   let lastError = null;
 
@@ -161,7 +162,13 @@ async function generateContentWithFallback(promptParts, systemInstruction = unde
       let currentDelay = delay;
       for (let i = 0; i < retriesPerModel; i++) {
         try {
-          return await model.generateContent(promptParts);
+          // Use multi-turn chat when conversation history exists
+          if (chatHistory && chatHistory.length > 0) {
+            const chat = model.startChat({ history: chatHistory });
+            return await chat.sendMessage(promptParts);
+          } else {
+            return await model.generateContent(promptParts);
+          }
         } catch (error) {
           lastError = error;
           const isTransient = error.status === 503 || error.status === 429 || 
@@ -228,6 +235,37 @@ app.post('/api/chat', apiLimiter, optionalAuth, upload.single('file'), async (re
       }]
     };
 
+    // --- FIX: Load conversation history BEFORE calling the AI model ---
+    let conv = null;
+    let chatHistory = [];
+
+    if (req.user && conversationId && mongoose.Types.ObjectId.isValid(conversationId)) {
+      conv = await Conversation.findOne({ _id: conversationId, userId: req.user.id });
+      if (conv && conv.messages && conv.messages.length > 0) {
+        // Convert stored messages to Gemini's chat history format
+        chatHistory = conv.messages.map(msg => ({
+          role: msg.role === 'user' ? 'user' : 'model',
+          parts: [{ text: msg.text }]
+        }));
+      }
+    }
+
+    // Fallback for guest users: use in-memory history sent from the frontend
+    if (chatHistory.length === 0 && req.body.history) {
+      try {
+        const clientHistory = JSON.parse(req.body.history);
+        if (Array.isArray(clientHistory) && clientHistory.length > 0) {
+          // Limit to last 50 messages to prevent abuse / token overflow
+          chatHistory = clientHistory.slice(-50).map(msg => ({
+            role: msg.role === 'user' ? 'user' : 'model',
+            parts: [{ text: typeof msg.text === 'string' ? msg.text : '' }]
+          }));
+        }
+      } catch (e) {
+        console.warn("⚠️ Failed to parse client-sent history:", e.message);
+      }
+    }
+
     let promptParts = [];
     if (message) promptParts.push(message);
     if (file) {
@@ -259,16 +297,11 @@ app.post('/api/chat', apiLimiter, optionalAuth, upload.single('file'), async (re
       return res.status(400).json({ error: "Message or file is required" });
     }
 
-    const result = await generateContentWithFallback(promptParts, systemInstruction);
+    // Pass chatHistory so Gemini uses multi-turn conversation context
+    const result = await generateContentWithFallback(promptParts, systemInstruction, 2, 1000, chatHistory);
     const botResponse = result.response.text();
 
     if (req.user) {
-      let conv = null;
-
-      if (conversationId && mongoose.Types.ObjectId.isValid(conversationId)) {
-        conv = await Conversation.findOne({ _id: conversationId, userId: req.user.id });
-      }
-
       if (!conv) {
         const titleText = message ? message.substring(0, 30) : (file ? "Image Upload" : "New Chat");
         conv = new Conversation({
