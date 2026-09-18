@@ -1024,6 +1024,12 @@ function App() {
       if (activeConvId) formData.append('conversationId', activeConvId);
       if (selectedFile) formData.append('file', selectedFile);
 
+      // Send in-memory conversation history for guest users (no DB-stored conversation)
+      // so the AI can maintain context across follow-up questions
+      if (!activeConvId && messages.length > 0) {
+        formData.append('history', JSON.stringify(messages));
+      }
+
       const headers = {};
       if (user) headers['Authorization'] = `Bearer ${user.token}`;
 
